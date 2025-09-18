@@ -29,7 +29,7 @@ export class Achievement {
 
   @ManyToOne(() => Game, (game) => game.achievements, { onDelete: 'CASCADE' })
   game: Game;
-  @OneToMany(() => UserAchievement, (userA) => userA.userAchievement, {
+  @OneToMany(() => UserAchievement, (userA) => userA.achievement, {
     cascade: false,
   })
   userAchievements: UserAchievement[];
