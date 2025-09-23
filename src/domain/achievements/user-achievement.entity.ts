@@ -7,6 +7,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { Achievement } from './achievement.entity';
 import { User } from '../users/user.entity';
@@ -27,9 +28,11 @@ export class UserAchievement {
   @ManyToOne(() => Achievement, (achievement) => achievement.userAchievements, {
     onDelete: 'CASCADE',
   })
+  @JoinColumn({ name: 'apiName' })
   achievement: Achievement;
   @ManyToOne(() => User, (user) => user.userAchievements, {
     onDelete: 'CASCADE',
   })
+  @JoinColumn({ name: 'userId' })
   user: User;
 }

@@ -28,4 +28,7 @@ export class User {
   userAchievements: UserAchievement[];
   @OneToMany(() => Friend, (friend) => friend.user, { cascade: false })
   friends: Friend[];
+
+  @OneToMany(() => Friend, (friend) => friend.user, { cascade: false })
+  friendedBy: Friend[];
 }

@@ -5,12 +5,11 @@ import {
   Index,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
   Unique,
   ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
-import { OwnedGame } from '../game/owned-game.entity';
 
 @Entity()
 @Unique(['userId', 'friendId'])
@@ -28,9 +27,10 @@ export class Friend {
   updatedAt: Date;
 
   @ManyToOne(() => User, (user) => user.friends, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userId' })
   user: User;
-  @ManyToOne(() => OwnedGame, (ownedGame) => ownedGame.friends, {
-    onDelete: 'CASCADE',
-  })
-  ownedGame: OwnedGame;
+
+  @ManyToOne(() => User, (user) => user.friendedBy, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'friendId' })
+  friend: User;
 }

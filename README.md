@@ -96,3 +96,50 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+```
+individual_nestjs
+├─ .prettierrc
+├─ eslint.config.mjs
+├─ nest-cli.json
+├─ package-lock.json
+├─ package.json
+├─ README.md
+├─ src
+│  ├─ app.controller.spec.ts
+│  ├─ app.controller.ts
+│  ├─ app.module.ts
+│  ├─ app.service.ts
+│  ├─ auth
+│  │  └─ auth.module.ts
+│  ├─ domain
+│  │  ├─ achievements
+│  │  │  ├─ achievement.entity.ts
+│  │  │  ├─ achievements.module.ts
+│  │  │  └─ user-achievement.entity.ts
+│  │  ├─ game
+│  │  │  ├─ game.entity.ts
+│  │  │  ├─ game.module.ts
+│  │  │  └─ owned-game.entity.ts
+│  │  └─ users
+│  │     ├─ user-friend.entity.ts
+│  │     ├─ user.entity.ts
+│  │     └─ users.module.ts
+│  ├─ friends
+│  │  └─ friends.module.ts
+│  ├─ game
+│  │  └─ game.module.ts
+│  ├─ integrations
+│  │  └─ steam
+│  │     ├─ steam.module.ts
+│  │     └─ steam.service.ts
+│  ├─ main.ts
+│  └─ me
+│     └─ me.module.ts
+├─ test
+│  ├─ app.e2e-spec.ts
+│  └─ jest-e2e.json
+├─ tsconfig.build.json
+└─ tsconfig.json
+
+```
