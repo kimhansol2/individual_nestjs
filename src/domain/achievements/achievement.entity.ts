@@ -10,7 +10,7 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
-import { Game } from '../game/game.entity';
+import { Game } from '../games/game.entity';
 import { UserAchievement } from './user-achievement.entity';
 
 @Entity()

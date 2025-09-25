@@ -7,16 +7,20 @@ import { AppService } from './app.service';
 import { SteamModule } from './integrations/steam/steam.module';
 import { AuthModule } from './auth/auth.module';
 import { MeModule } from './me/me.module';
-import { GameModule } from './game/game.module';
-import { FriendsModule } from './friends/friends.module';
 import { UsersModule } from './domain/users/users.module';
-import { GameDomainModule } from './domain/game/game.module';
+import { GameDomainModule } from './domain/games/game.module';
 import { AchievementsModule } from './domain/achievements/achievements.module';
+import { OwnedGame } from './domain/games/owned-game.entity';
+import { Game } from './domain/games/game.entity';
+import { User } from './domain/users/user.entity';
+import { Achievement } from './domain/achievements/achievement.entity';
+import { UserAchievement } from './domain/achievements/user-achievement.entity';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
       cache: true,
       validationSchema: Joi.object({
         NODE_ENV: Joi.string().valid('dev', 'prod', 'test').default('dev'),
@@ -35,14 +39,16 @@ import { AchievementsModule } from './domain/achievements/achievements.module';
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
         autoLoadEntities: true,
-        synchronize: true, // prod에서 false 변경 예정
+        synchronize: false,
+        logging: process.env.TYPEORM_LOGGING === 'true',
+        migrationsRun: process.env.TYPEORM_MIGRATIONS_RUN === 'true',
+        migrations: ['dist/migrations/*.js'],
+        entities: [OwnedGame, Game, User, Achievement, UserAchievement],
       }),
     }),
     SteamModule,
     AuthModule,
     MeModule,
-    GameModule,
-    FriendsModule,
     UsersModule,
     AchievementsModule,
     GameDomainModule,

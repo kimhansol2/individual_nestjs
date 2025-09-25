@@ -7,12 +7,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  OneToMany,
   JoinColumn,
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Game } from './game.entity';
-import { Friend } from '../users/user-friend.entity';
 
 @Entity()
 @Unique(['userId', 'gameId'])

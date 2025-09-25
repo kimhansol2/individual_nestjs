@@ -7,7 +7,7 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { OwnedGame } from '../game/owned-game.entity';
+import { OwnedGame } from '../games/owned-game.entity';
 import { UserAchievement } from '../achievements/user-achievement.entity';
 import { Friend } from './user-friend.entity';
 
