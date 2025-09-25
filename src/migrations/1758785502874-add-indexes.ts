@@ -15,7 +15,7 @@ export class AddIndexes1758785502874 implements MigrationInterface {
         `);
 
     await q.query(`
-        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_game_lower_name_prefix ON "game" ((LOWER("name")), text_pattern_ops);
+        CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_game_lower_name_prefix ON "game" ((LOWER("name")) text_pattern_ops);
         `);
   }
 
