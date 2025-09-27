@@ -28,6 +28,12 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
         STEAM_API_KEY: Joi.string().required(),
         STEAM_REALM: Joi.string().uri().required(),
         STEAM_RETURN_URL: Joi.string().uri().required(),
+        JWT_SECRET: Joi.string().min(32).required(),
+        JWT_EXPIRES_IN: Joi.string().default('15m'),
+        REDIS_HOST: Joi.string().required(),
+        REDIS_PORT: Joi.number().required(),
+        REDIS_USERNAME: Joi.string().required(),
+        REDIS_PASSWORD: Joi.string().min(1).required(),
       }),
     }),
     TypeOrmModule.forRootAsync({
