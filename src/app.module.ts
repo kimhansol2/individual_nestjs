@@ -15,6 +15,8 @@ import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
+import Redis from 'ioredis';
+import { RedisModule } from './infra/redis/redis.module';
 
 @Module({
   imports: [
@@ -58,6 +60,7 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
     UsersModule,
     AchievementsModule,
     GameDomainModule,
+    RedisModule,
   ],
   controllers: [AppController],
   providers: [AppService],
