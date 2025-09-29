@@ -15,7 +15,6 @@ import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
-import Redis from 'ioredis';
 import { RedisModule } from './infra/redis/redis.module';
 
 @Module({
@@ -30,8 +29,10 @@ import { RedisModule } from './infra/redis/redis.module';
         STEAM_API_KEY: Joi.string().required(),
         STEAM_REALM: Joi.string().uri().required(),
         STEAM_RETURN_URL: Joi.string().uri().required(),
-        JWT_SECRET: Joi.string().min(32).required(),
+        JWT_ACCESS_SECRET: Joi.string().min(32).required(),
         JWT_EXPIRES_IN: Joi.string().default('15m'),
+        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+        JWT_REFERSH_EXPIRES_IN: Joi.string().default('3d'),
         REDIS_HOST: Joi.string().required(),
         REDIS_PORT: Joi.number().required(),
         REDIS_USERNAME: Joi.string().required(),
