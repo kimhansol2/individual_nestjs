@@ -272,13 +272,17 @@ export class SteamOpenIdService {
         throw new BadRequestException('replay detected (response_nonce)');
       }
 
-      // OpenId 서명 검증: Steam OP에 check_authentication 요청
-      const body = new URLSearchParams({
-        'openid.mode': 'check_authentication',
-      });
+      // OpenID 서명 검증 요청 본문 만들기
+      const body = new URLSearchParams();
+
       for (const [k, v] of Object.entries(query)) {
-        if (k.startsWith('openid.')) body.append(k, v);
+        if (k.startsWith('openid.') && k !== 'openid.mode') {
+          body.append(k, v);
+        }
       }
+
+      //마지막에 단 한 번만 check_authentication 지정
+      body.set('openid.mode', 'check_authentication');
 
       const { data } = await axios.post(OP, body, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
