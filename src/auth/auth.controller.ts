@@ -31,7 +31,7 @@ export class SteamAuthController {
     // refersh 쿠키 설정 (HttpOnly)
     res.cookie('refresh_token', result.refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: false, // 바꿔야함
       sameSite: 'lax',
       maxAge: result.refreshTokenMaxAgeMs,
       path: '/api/v1',
@@ -58,7 +58,7 @@ export class SteamAuthController {
 
     res.cookie('refresh_token', out.refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: false, // 바꿔야함
       sameSite: 'lax',
       maxAge: out.refreshTokenMaxAgeMs,
       path: '/api/v1',

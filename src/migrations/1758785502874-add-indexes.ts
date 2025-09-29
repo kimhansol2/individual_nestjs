@@ -2,7 +2,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class AddIndexes1758785502874 implements MigrationInterface {
   //Postgres의 CREAT INDEX CONCURRENTLY는 트랜잭션 금지
-  public readonly transaction = false;
+  public transaction = false;
 
   public async up(q: QueryRunner): Promise<void> {
     // 정렬: playtimeForever -> 보조 정렬 game_id까지 커버

@@ -11,20 +11,16 @@ import { RedisHealthService } from './redis-health.service';
       provide: 'REDIS',
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => {
-        const host = cfg.getOrThrow<string>('REDIS_HOST');
-        const port = Number(cfg.getOrThrow<string>('REDIS_PORT'));
-        const username = cfg.getOrThrow<string>('REDIS_USERNAME');
-        const password = cfg.getOrThrow<string>('REDIS_PASSWORD');
-
-        const client = new Redis({
-          host,
-          port,
-          username,
-          password,
-          tls: { servername: host, minVersion: 'TLSv1.2' },
+        const url = cfg.getOrThrow<string>('REDIS_URL');
+        const u = new URL(url);
+        const client = new Redis(url, {
           maxRetriesPerRequest: 1,
         });
 
+        console.log(
+          '[Redis] using URL',
+          `${u.protocol}//${u.username}@${u.hostname}:${u.port}`,
+        );
         client.on('connect', () => console.log('[Redis] connecting...'));
         client.on('ready', () => console.log('[Redis] ready'));
         client.on('error', (e) => console.error('[Redis]', e.message));
