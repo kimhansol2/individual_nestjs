@@ -1,0 +1,9 @@
+###
+GET http://localhost:3000/api/v1/health/redis
+
+###
+GET http://localhost:3000/api/v1/auth/steam
+
+###
+POST http://localhost:3000/api/v1/auth/steam/refresh
+Cookie: refresh_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOjEsImp0aSI6ImNkNzE2NmQwN2E4NTMyODA5YzI2ZDY1NTk3ODk4YmE2IiwidHlwIjoicmVmcmVzaCIsImlhdCI6MTc1OTE1NzQxOCwiZXhwIjoxNzU5NDE2NjE4fQ.AVMTQze7Qpwj9mziS9DTsV7Ir2BQfeR8kgX0lfuSCuQ;
