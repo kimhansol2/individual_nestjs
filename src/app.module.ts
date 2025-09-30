@@ -15,6 +15,7 @@ import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -27,7 +28,7 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
         PORT: Joi.number().default(3000),
         STEAM_API_KEY: Joi.string().required(),
         STEAM_REALM: Joi.string().uri().required(),
-        STEAM_RETURN_URL: Joi.string().uri().required(),
+        STEAM_RETURN_TO: Joi.string().uri().required(),
       }),
     }),
     TypeOrmModule.forRootAsync({
@@ -39,10 +40,11 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
         autoLoadEntities: true,
-        synchronize: false,
+        synchronize: true,
         logging: process.env.TYPEORM_LOGGING === 'true',
-        migrationsRun: process.env.TYPEORM_MIGRATIONS_RUN === 'true',
         migrations: ['dist/migrations/*.js'],
+        migrationsRun: false,
+        migrationsTransactionMode: 'each',
         entities: [OwnedGame, Game, User, Achievement, UserAchievement],
       }),
     }),
@@ -52,6 +54,7 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
     UsersModule,
     AchievementsModule,
     GameDomainModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
