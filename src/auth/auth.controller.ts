@@ -6,6 +6,7 @@ import {
   Req,
   Post,
   UnauthorizedException,
+  HttpCode,
 } from '@nestjs/common';
 import type { Response, Request } from 'express';
 import { SteamOpenIdService } from './steam-openid.service';
@@ -47,6 +48,7 @@ export class SteamAuthController {
   }
 
   @Post('refresh')
+  @HttpCode(200)
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
