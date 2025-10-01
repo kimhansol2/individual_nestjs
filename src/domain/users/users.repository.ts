@@ -40,4 +40,8 @@ export class UsersRepository {
     if (!user) throw new Error('upsertBySteamId: user not found after upsert');
     return user;
   }
+
+  async findById(id: number): Promise<User | null> {
+    return this.repo.findOne({ where: { id } });
+  }
 }

@@ -15,23 +15,30 @@ import { Game } from './game.entity';
 @Entity()
 @Unique(['userId', 'gameId'])
 export class OwnedGame {
-  @PrimaryGeneratedColumn() id: number;
+  @PrimaryGeneratedColumn() id!: number;
   @Index()
   @Column()
-  userId: number;
-  @Index() @Column() gameId: number;
-  @Column({ default: 0 }) playtimeForever: number;
-  @Column({ default: 0 }) playtime2Weeks: number;
+  userId!: number;
+  @Index() @Column() gameId!: number;
+  @Column({ default: 0 }) playtimeForever!: number;
+  @Column({ default: 0 }) playtime2Weeks!: number;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-  updatedAt: Date;
+  updatedAt!: Date;
+  @Column({ type: 'timestamptz', nullable: true, name: 'last_played_at' })
+  lastPlayedAt!: Date | null;
+  @Column({ default: false }) installed!: boolean;
+  @Column({ default: false }) hidden!: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'added_at' })
+  addedAt!: Date | null;
 
   @ManyToOne(() => User, (user) => user.ownedGames, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
-  user: User;
+  user!: User;
 
   @ManyToOne(() => Game, (game) => game.ownedGames, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'gameId' })
-  game: Game;
+  game!: Game;
 }

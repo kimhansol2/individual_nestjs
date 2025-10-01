@@ -16,6 +16,8 @@
     "baseUrl": ".",
     "incremental": true,
     "skipLibCheck": true,
+    "strict": true,
+    "types": ["node", "express", "jest"],
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
@@ -25,5 +27,7 @@
     "paths": {
       "src/*": ["src/*"]
     }
-  }
+  },
+  "include": ["src/**/*.ts", "src/@types/**/*.d.ts"],
+  "exclude": ["**/*.spec.ts", "test/**"]
 }

@@ -2,9 +2,9 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import cookieParser from 'cookie-parser';
-import { SteamAuthController } from 'src/auth/auth.controller';
-import { SteamOpenIdService } from 'src/auth/steam-openid.service';
-import { UsersRepository } from 'src/domain/users/users.repository';
+import { SteamAuthController } from '../src/auth/auth.controller';
+import { SteamOpenIdService } from '../src/auth/steam-openid.service';
+import { UsersRepository } from '../src/domain/users/users.repository';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 

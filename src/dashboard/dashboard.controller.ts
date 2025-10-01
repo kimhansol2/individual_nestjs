@@ -1,16 +1,17 @@
-// 대시보드 컨트롤러
+// dashboard.controller.ts
 
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Req } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
-import { DashboardResponseDto } from './dto/dashboard-response.dto';
+import { DashbrdResDto } from '../dto/dashbrdRes.dto';
 
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
-  // GET/dashboard 요청
+  // GET /dashboard 요청
   @Get()
-  getDashboard(): DashboardResponseDto {
-    return this.dashboardService.getSteamDashboard();
+  async getDashboard(): Promise<DashbrdResDto> {
+    const userId = 1; // 테스트용 userId, 실제 인증된 유저 ID로 변경 필요
+    return await this.dashboardService.getSteamDashboard(userId);
   }
 }

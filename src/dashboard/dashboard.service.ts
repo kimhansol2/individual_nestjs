@@ -1,120 +1,109 @@
 // 대시보드 서비스
 
+// src/dashboard/dashboard.service.ts
+
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-
-// 엔티티 import
 import { User } from '../domain/users/user.entity';
-import { Game } from '../domain/games/game.entity';
 import { OwnedGame } from '../domain/games/owned-game.entity';
-import { Achievement } from '../domain/achievements/achievement.entity';
-import { UserAchievement } from '../domain/achievements/user-achievement.entity';
-import { Friend } from '../domain/users/user-friend.entity';
-
-// DTO import
-import { DashboardResponseDto, DashboardDataDto } from './dto/dashboard-response.dto';
-import { GameDto } from './dto/game.dto';
-import { FriendDto } from './dto/friends.dto';
-import { SummaryDto } from './dto/summary.dto';
+import { Game } from '../domain/games/game.entity';
+import { Friend } from '../domain/friend/friend.entity';
+import { AchDto } from '../dto/ach.dto';
+import { oGameDto } from '../dto/oGame.dto';
+import { FriendDto } from '../dto/friends.dto';
+import { DashbrdDataDto } from '../dto/dashbrdData.dto';
+import { DashbrdResDto } from '../dto/dashbrdRes.dto';
+import { SumDto } from '../dto/sum.dto';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class DashboardService {
   constructor(
     @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
-    @InjectRepository(Game)
-    private readonly gameRepo: Repository<Game>,
+    private readonly userRepository: Repository<User>,
     @InjectRepository(OwnedGame)
-    private readonly ownedGameRepo: Repository<OwnedGame>,
-    @InjectRepository(Achievement)
-    private readonly achievementRepo: Repository<Achievement>,
-    @InjectRepository(UserAchievement)
-    private readonly userAchievementRepo: Repository<UserAchievement>,
+    private readonly ownedGameRepository: Repository<OwnedGame>,
+    @InjectRepository(Game)
+    private readonly gameRepository: Repository<Game>,
     @InjectRepository(Friend)
-    private readonly friendRepo: Repository<Friend>,
+    private readonly friendRepository: Repository<Friend>,
   ) {}
 
-  async getSteamDashboard(userId: number): Promise<DashboardResponseDto> {
+  async getSteamDashboard(userId: number): Promise<DashbrdResDto> {
     try {
       // 유저 정보
-      const user = await this.userRepo.findOneBy({ id: userId });
-      if (!user) return { data: null, error: 'User not found' };
+      const user: User | null = await this.userRepository.findOne({ where: { id: userId } });
+      if (!user) {
+        return { data: null, error: 'User not found' };
+      }
 
-      // 소유 게임
-      const ownedGames = await this.ownedGameRepo.find({
+      // 소유 게임 & 최근 플레이
+      const ownedGames: OwnedGame[] = await this.ownedGameRepository.find({
         where: { userId },
         relations: ['game'],
       });
 
-      // 최근 플레이 게임 (예: 최근 10개)
-      const recentlyPlayed: GameDto[] = ownedGames
-        .sort((a, b) => b.playtime2Weeks - a.playtime2Weeks)
-        .slice(0, 10)
-        .map(og => ({
-          gameId: og.game.gameId,
-          title: og.game.title,
-          gameImage: og.game.icon || '',
-          playtime_forever: og.playtimeForever,
-          playtime_2weeks: og.playtime2Weeks,
-          createdAt: og.createdAt.toISOString(),
-          updatedAt: og.updatedAt.toISOString(),
-          last_played_at: og.last_played_at.toISOString(),
-        }));
-
-      // 가장 많이 플레이한 게임
-      const mostPlayedGame = ownedGames.reduce((prev, curr) =>
-        prev.playtimeForever > curr.playtimeForever ? prev : curr,
-      );
-
-      const mostPlayed: GameDto = {
-        gameId: mostPlayedGame.game.gameId,
-        title: mostPlayedGame.game.title,
-        gameImage: mostPlayedGame.game.icon || '',
-        playtime_forever: mostPlayedGame.playtimeForever,
-        last_played_at: mostPlayedGame.last_played_at.toISOString(),
-      };
-
-      // 성취도
-      const achievements = await this.userAchievementRepo.find({ where: { userId } });
-      const earned = achievements.filter(a => a.achieved).length;
-      const total = achievements.length;
-      const ratio = total > 0 ? (earned / total) * 100 : 0;
-
-      // 친구 목록
-      const friends = await this.friendRepo.find({ where: { userId } });
-      const friendList: FriendDto[] = friends.map(f => ({
-        id: f.friendId,
-        steamid64: '', // 필요시 채우기
-        persona_name: '', // 필요시 채우기
-        avatar: '', // 필요시 채우기
+      const oGames: oGameDto[] = ownedGames.map(g => ({
+        id: g.id,
+        userId: g.userId,
+        gameId: g.gameId,
+        title: g.game.title,
+        icon: g.game.icon ?? undefined,
+        playtime_forever: g.playtimeForever,
+        playtime_2weeks: g.playtime2Weeks,
+        created_at: g.createdAt,
+        updated_at: g.updatedAt,
+        last_played_at: g.lastPlayedAt ?? new Date(0),
       }));
 
-      const data: DashboardDataDto = {
+      // summary
+      const mostPlayed = oGames.reduce((prev, curr) => 
+        curr.playtime_forever > prev.playtime_forever ? curr : prev,
+        oGames[0],
+      );
+
+      const summary: SumDto = {
+        total_games: oGames.length,
+        total_playtime_minutes: oGames.reduce((sum, g) => sum + g.playtime_forever, 0),
+        recent_playtime_2weeks_minutes: oGames.reduce((sum, g) => sum + g.playtime_2weeks, 0),
+        most_played_game: mostPlayed,
+        last_played_at: oGames[0]?.last_played_at ?? new Date(0),
+      };
+
+      // 친구
+      const friends: Friend[] = await this.friendRepository.find({ where: { userId } });
+      const friendDtos: FriendDto[] = friends.map(f => ({
+        id: f.id,
+        userId: f.userId,
+        friendId: f.friendId,
+        friend_since: f.friend_since ?? undefined, // Date | undefined
+        created_at: f.created_at,
+        updated_at: f.updated_at,
+      }));
+
+      // dashboard data
+      const data: DashbrdDataDto = {
         profile: {
-          steamid64: user.steamId,
-          persona_name: user.personaName || '',
-          avatar: user.avatar || '',
+          steamid: user.steamId,
+          personaName: user.personaName ?? '',
+          avatar: user.avatar ?? undefined,
         },
-        summary: {
-          total_games: ownedGames.length,
-          total_playtime_minutes: ownedGames.reduce((sum, g) => sum + g.playtimeForever, 0),
-          recent_playtime_2weeks_minutes: ownedGames.reduce((sum, g) => sum + g.playtime2Weeks, 0),
-          most_played_game: mostPlayed,
-          last_played_at: recentlyPlayed[0]?.last_played_at || '',
-        },
-        recently_played: recentlyPlayed,
-        achievement_progress: { earned, total, ratio },
-        friends: { count: friends.length, list: friendList },
+        summary,
+        recently_played: oGames,
+        achievement_progress: { earned: 0, total: 0, ratio: 0 },
+        friends: { count: friendDtos.length, list: friendDtos },
         quick_links: { games: '/games', friends: '/friends', achievements: '/achievements' },
       };
 
       return { data, error: null };
     } catch (err) {
-      return { data: null, error: err.message };
+      return { data: null, error: (err as Error).message };
     }
   }
 }
+
+
+
 
 
 

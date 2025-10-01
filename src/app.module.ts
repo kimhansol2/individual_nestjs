@@ -2,22 +2,35 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
+
+// Controller 임포트
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { HealthController } from './infra/redis/redis-health.controller';
+import { DashboardController } from './dashboard/dashboard.controller';
+
+// Module 임포트
 import { SteamModule } from './integrations/steam/steam.module';
 import { AuthModule } from './auth/auth.module';
 import { MeModule } from './me/me.module';
 import { UsersModule } from './domain/users/users.module';
 import { GameDomainModule } from './domain/games/game.module';
 import { AchievementsModule } from './domain/achievements/achievements.module';
+import { RedisModule } from './infra/redis/redis.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+
+// Service 임포트
+import { AppService } from './app.service';
+import { DashboardService } from './dashboard/dashboard.service';
+
+// Entity 임포트
 import { OwnedGame } from './domain/games/owned-game.entity';
 import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
-import { RedisModule } from './infra/redis/redis.module';
-import { HealthController } from './infra/redis/redis-health.controller';
-import { SteamAuthController } from './auth/auth.controller';
+import { Friend } from './domain/friend/friend.entity';
 
 @Module({
   imports: [
@@ -34,7 +47,7 @@ import { SteamAuthController } from './auth/auth.controller';
         JWT_ACCESS_SECRET: Joi.string().min(32).required(),
         JWT_EXPIRES_IN: Joi.string().default('15m'),
         JWT_REFRESH_SECRET: Joi.string().min(32).required(),
-        JWT_REFERSH_EXPIRES_IN: Joi.string().default('3d'),
+        JWT_REFRESH_EXPIRES_IN: Joi.string().default('3d'),
         REDIS_URL: Joi.string().required(),
       }),
     }),
@@ -51,8 +64,21 @@ import { SteamAuthController } from './auth/auth.controller';
         logging: process.env.TYPEORM_LOGGING === 'true',
         migrations: ['dist/migrations/*.js'],
         migrationsTransactionMode: 'each',
+        entities: [OwnedGame, Game, User, Achievement, UserAchievement, Friend],
+      }),
+    }),
+    
+    // TypeOrmModule.forFeature 추가
+    TypeOrmModule.forFeature([User, OwnedGame, Game, Friend]),
 
-        entities: [OwnedGame, Game, User, Achievement, UserAchievement],
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: async () => ({
+        store: await redisStore({
+          url: process.env.REDIS_URL,
+        }),
+        ttl: 30,
+        max: 0,
       }),
     }),
     SteamModule,
@@ -62,8 +88,9 @@ import { SteamAuthController } from './auth/auth.controller';
     AchievementsModule,
     GameDomainModule,
     RedisModule,
+    DashboardModule,
   ],
-  controllers: [AppController, HealthController, SteamAuthController],
-  providers: [AppService],
+  controllers: [AppController, HealthController, DashboardController],
+  providers: [AppService, DashboardService],
 })
 export class AppModule {}
