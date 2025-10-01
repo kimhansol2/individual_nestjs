@@ -18,7 +18,8 @@ import { UserAchievement } from './user-achievement.entity';
 export class Achievement {
   @PrimaryGeneratedColumn() id: number;
   @Index() @Column() gameId: number;
-  @Column() apiName: string;
+  // @Column() apiName: string;
+  @Index({ unique: true }) @Column() apiName: string;
   @Column() name: string;
   @Column({ type: 'text', nullable: true }) description?: string;
   @Column({ default: false }) hidden: boolean;
@@ -31,8 +32,11 @@ export class Achievement {
   @ManyToOne(() => Game, (game) => game.achievements, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'gameId' })
   game: Game;
-  @OneToMany(() => UserAchievement, (userA) => userA.achievement, {
-    cascade: false,
-  })
-  userAchievements: UserAchievement[];
+//   @OneToMany(() => UserAchievement, (userA) => userA.achievement, {
+//     cascade: false,
+//   })
+//   userAchievements: UserAchievement[];
+// }
+  @OneToMany(() => UserAchievement, (userA) => userA.achievement)
+    userAchievements: UserAchievement[];
 }
