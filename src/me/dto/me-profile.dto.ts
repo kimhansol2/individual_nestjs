@@ -1,5 +1,3 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
-
 export type ApiError = { code: string; message: string } | null;
 
 export type MeProfileDto = {

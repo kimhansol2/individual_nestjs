@@ -42,7 +42,7 @@ export class CacheAsideService {
     const lockMs = opts.lockMs ?? 5000;
 
     //SET NX PX로 락 시도
-    const locked = await this.redis.set(lockKey, '1', 'PX', 5000, 'NX');
+    const locked = await this.redis.set(lockKey, '1', 'PX', lockMs, 'NX');
     if (locked) {
       try {
         const data = await loader();

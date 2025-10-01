@@ -10,8 +10,17 @@ import { ConfigService } from '@nestjs/config';
 
 //axios 모킹 (OpenID check_authentication & GetPlayerSummaries)
 import axios from 'axios';
+import { Server } from 'http';
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+
+const firstSetCookie = (h: unknown): string => {
+  if (Array.isArray(h)) {
+    const v = h[0] as unknown;
+    return typeof v === 'string' ? v : '';
+  }
+  return typeof h === 'string' ? h : '';
+};
 
 // ioredis multi/exec 응답 튜플 타입
 type ExecReply = [error: null, value: 'OK' | 1 | 0];
@@ -22,7 +31,7 @@ class MockRedis {
   private store = new Map<string, string>();
   private queue: Array<() => ExecReply> = [];
 
-  set(key: string, value: string, ...args: unknown[]): 'OK' {
+  set(key: string, value: string): 'OK' {
     this.store.set(key, value);
     return 'OK';
   }
@@ -36,38 +45,41 @@ class MockRedis {
   }
 
   multi() {
-    const self = this;
-    return {
-      set(key: string, value: string, ...args: unknown[]) {
-        self.queue.push(() => [null, self.set(key, value, ...args)]);
-        return this;
+    const builder = {
+      set: (key: string, value: string) => {
+        this.queue.push(() => [null, this.set(key, value)]);
+        return builder;
       },
-      del(key: string) {
-        self.queue.push(() => [null, self.del(key)]);
-        return this;
+      del: (key: string) => {
+        this.queue.push(() => [null, this.del(key)]);
+        return builder;
       },
-      async exec(): Promise<ExecReply[]> {
-        const out = self.queue.map((fn) => fn());
-        self.queue = [];
-        return out;
+      exec: (): Promise<ExecReply[]> => {
+        const out = this.queue.map((fn) => fn());
+        this.queue = [];
+        return Promise.resolve(out);
       },
     };
+    return builder;
   }
 
   // 이벤트 리스너 시그니처
-  on(_event: string, _cb: (...args: unknown[]) => void): void {}
+  on(..._args: unknown[]): void {
+    void _args;
+  }
 }
 
 const usersRepoMock: UsersRepository = {
-  upsertBySteamId: async (
+  upsertBySteamId: (
     steamId: string,
     patch?: { personaName?: string | null; avatar?: string | null },
-  ) => ({
-    id: 1,
-    steamId,
-    personaName: patch?.personaName ?? null,
-    avatar: patch?.avatar ?? null,
-  }),
+  ) =>
+    Promise.resolve({
+      id: 1,
+      steamId,
+      personaName: patch?.personaName ?? null,
+      avatar: patch?.avatar ?? null,
+    }),
 } as UsersRepository;
 
 const configMock: Pick<ConfigService, 'get' | 'getOrThrow'> = {
@@ -101,6 +113,7 @@ const configMock: Pick<ConfigService, 'get' | 'getOrThrow'> = {
 
 describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/steam/refresh', () => {
   let app: INestApplication;
+  let server: Server;
   let redis: MockRedis;
 
   beforeAll(async () => {
@@ -121,6 +134,8 @@ describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/s
     app.setGlobalPrefix('api/v1');
     app.use(cookieParser());
     await app.init();
+
+    server = app.getHttpServer() as unknown as Server;
   });
 
   afterAll(async () => {
@@ -132,18 +147,43 @@ describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/s
   });
 
   it('1) GET /api/v1/auth/steam -> 302 (Steam OP로 리다이렉트, return_to에 state/nonce 포함)', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/auth/steam')
-      .expect(302);
+    const res = await request(server).get('/api/v1/auth/steam').expect(302);
 
-    const loc = res.headers.location as string;
+    const locHeader: unknown = res.headers['location'];
+    const loc: string = firstSetCookie(locHeader);
+
     expect(loc).toContain('https://steamcommunity.com/openid/login');
+
     const op = new URL(loc);
-    const rt = new URL(op.searchParams.get('openid.return_to')!);
+    const rtStr = op.searchParams.get('openid.return_to') ?? '';
+    const rt = new URL(rtStr);
     expect(rt.pathname).toBe('/api/v1/auth/steam/callback');
-    expect(rt.searchParams.get('state')).toBeTruthy();
-    expect(rt.searchParams.get('nonce')).toBeTruthy();
+    expect(Boolean(rt.searchParams.get('state'))).toBe(true);
+    expect(Boolean(rt.searchParams.get('nonce'))).toBe(true);
   });
+
+  type callbackBody = {
+    tokenType: 'Bearer';
+    expiresIn: number;
+    accessToken: string;
+    user: {
+      id: number;
+      steamId: string;
+      personaName: string | null;
+      avatar: string | null;
+    };
+  };
+  const isCallbackBody = (x: unknown): x is callbackBody => {
+    if (!x || typeof x !== 'object') return false;
+    const b = x as Record<string, unknown>;
+    return (
+      b.tokenType === 'Bearer' &&
+      typeof b.expiresIn === 'number' &&
+      typeof b.accessToken === 'string' &&
+      typeof b.user === 'object' &&
+      b.user !== null
+    );
+  };
 
   it('2) GET /api/v1/auth/steam/callback -> 200 (검증 ok, Set-Cookie refresh_tokenm JSON 바디)', async () => {
     await redis
@@ -168,7 +208,7 @@ describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/s
 
     const claimed = 'https://steamcommunity.com/openid/id/76561198000000000';
 
-    const res = await request(app.getHttpServer())
+    const res = await request(server)
       .get('/api/v1/auth/steam/callback')
       .query({
         'openid.mode': 'id_res',
@@ -184,23 +224,26 @@ describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/s
       })
       .expect(200);
 
+    expect(isCallbackBody(res.body)).toBe(true);
+    if (!isCallbackBody(res.body)) throw new Error('unexpected body');
+    const body = res.body;
+
     //바디 검증
     const jwtRe = /^[\w-]+\.[\w-]+\.[\w-]+$/;
 
-    expect(res.body.tokenType).toBe('Bearer');
-    expect(res.body.expiresIn).toBe(900);
-    expect(typeof res.body.accessToken).toBe('string');
-    expect(res.body.accessToken).toMatch(jwtRe);
-    expect(res.body.user).toEqual({
+    expect(body.tokenType).toBe('Bearer');
+    expect(body.expiresIn).toBe(900);
+    expect(typeof body.accessToken).toBe('string');
+    expect(body.accessToken).toMatch(jwtRe);
+    expect(body.user).toEqual({
       id: 1,
       steamId: '76561198000000000',
       personaName: 'Alice',
       avatar: 'https://avatar',
     });
 
-    const setCookie = Array.isArray(res.headers['set-cookie'])
-      ? res.headers['set-cookie'].join(';')
-      : '';
+    const rawSetCookie: unknown = res.headers['set-cookie'];
+    const setCookie = firstSetCookie(rawSetCookie);
     expect(setCookie).toContain('refresh_token=');
     expect(setCookie.toLowerCase()).toContain('httponly');
     expect(setCookie).toContain('Path=/api/v1');
@@ -225,7 +268,7 @@ describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/s
     });
 
     const claimed = 'https://steamcommunity.com/openid/id/76561198000000001';
-    const cb = await request(app.getHttpServer())
+    const cb = await request(server)
       .get('/api/v1/auth/steam/callback')
       .query({
         'openid.mode': 'id_res',
@@ -242,28 +285,31 @@ describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/s
       .expect(200);
 
     // 콜백에서 내려온 refresh_token 쿠키 추출
-    const setCookieCb = Array.isArray(cb.headers['set-cookie'])
-      ? (cb.headers['set-cookie'][0] ?? '')
-      : '';
-
-    const refreshCookie = setCookieCb.split(';')[0];
+    const rawSetCookie2: unknown = cb.headers['set-cookie'];
+    const firstCookieStr = firstSetCookie(rawSetCookie2);
+    const refreshCookie = firstCookieStr.split(';', 1)[0];
     expect(refreshCookie.startsWith('refresh_token=')).toBe(true);
 
     //회전 호출
-    const res = await request(app.getHttpServer())
+    const res = await request(server)
       .post('/api/v1/auth/steam/refresh')
       .set('Cookie', refreshCookie)
       .expect(200);
 
     const jwtRe = /^[\w-]+\.[\w-]+\.[\w-]+$/;
-    expect(res.body.tokenType).toBe('Bearer');
-    expect(typeof res.body.accessToken).toBe('string');
-    expect(res.body.accessToken).toMatch(jwtRe);
+    expect(res.body && typeof res.body === 'object').toBe(true);
+    const b = res.body as Record<string, unknown>;
+    expect(b.tokenType).toBe('Bearer');
+    expect(typeof b.accessToken).toBe('string');
+    expect(String(b.accessToken)).toMatch(jwtRe);
 
-    const rotated = Array.isArray(res.headers['set-cookie'])
-      ? res.headers['set-cookie'].join('; ')
-      : '';
-    expect(rotated).toContain('refresh_token=');
-    expect(rotated).toContain('Path=/api/v1');
+    const rotated = res.headers['set-cookie'];
+    const rotatedStr = Array.isArray(rotated)
+      ? rotated.join('; ')
+      : typeof rotated === 'string'
+        ? rotated
+        : '';
+    expect(rotatedStr).toContain('refresh_token=');
+    expect(rotatedStr).toContain('Path=/api/v1');
   });
 });

@@ -11,6 +11,16 @@ import {
 import type { Response, Request } from 'express';
 import { SteamOpenIdService } from './steam-openid.service';
 
+function getCookie(req: Request, name: string): string | undefined {
+  const anyReq = req as unknown as { cookies?: unknown };
+  const { cookies } = anyReq;
+  if (cookies && typeof cookies === 'object') {
+    const val = (cookies as Record<string, unknown>)[name];
+    if (typeof val === 'string') return val;
+  }
+  return undefined;
+}
+
 @Controller('auth/steam')
 export class SteamAuthController {
   constructor(private readonly steam: SteamOpenIdService) {}
@@ -53,7 +63,7 @@ export class SteamAuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const token = req.cookies?.['refresh_token'];
+    const token = getCookie(req, 'refresh_token');
     if (!token) throw new UnauthorizedException('no refresh cookie');
 
     const out = await this.steam.rotateRefreshToken(token);
