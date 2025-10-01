@@ -18,4 +18,9 @@ export class GetCommonGamesDto {
   @IsOptional()
   @IsBoolean()
   ascending?: boolean = true;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  friendId?: number;
 }

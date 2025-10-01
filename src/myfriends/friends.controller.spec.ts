@@ -4,6 +4,8 @@ import { FriendsService } from './friends.service';
 import { GetFriendsDto } from './get-friends.dto';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { PaginatedResponse } from 'src/common/types/pagination.types';
+import { FriendWithExtra } from 'src/common/types/friend-with-extra.types';
 
 describe('FriendsController', () => {
   let controller: FriendsController;
@@ -65,7 +67,8 @@ describe('FriendsController', () => {
     };
 
     // 컨트롤러 메서드에 맞게 호출
-    const result = await controller.getFriends(userId, query);
+    const result: PaginatedResponse<FriendWithExtra> =
+      await controller.getFriends(userId, query);
 
     // 서비스 메서드 호출 시에는 숫자로 변환됐는지 확인
     expect(getFriendsMock).toHaveBeenCalledWith(1, query);

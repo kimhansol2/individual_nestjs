@@ -13,7 +13,7 @@ import { GetFriendsDto } from './get-friends.dto';
 import { GetCommonGamesDto } from './get-common-games.dto'; // 이 DTO도 임포트
 import { PaginatedResponse } from 'src/common/types/pagination.types';
 import { Game } from 'src/domain/games/game.entity';
-import { UserGame } from 'src/domain/games/user-game.entity';
+import { OwnedGame } from '../domain/games/owned-game.entity';
 
 export interface FriendWithExtra extends Friend {
   mutualFriendsCount?: number;
@@ -25,18 +25,6 @@ export interface FriendWithExtra extends Friend {
     displayName: string;
     avatarUrl?: string;
     lastOnlineAt?: Date;
-  };
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
   };
 }
 
@@ -52,8 +40,8 @@ export class FriendsService {
   constructor(
     @InjectRepository(Friend)
     private readonly friendRepository: Repository<Friend>,
-    @InjectRepository(UserGame)
-    private readonly userGameRepository: Repository<UserGame>,
+    @InjectRepository(OwnedGame)
+    private readonly userGameRepository: Repository<OwnedGame>,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
   ) {}
@@ -63,7 +51,7 @@ export class FriendsService {
     dto: GetFriendsDto,
   ): Promise<PaginatedResponse<FriendWithExtra>> {
     try {
-      const cacheKey = this.generateCacheKey(userId, dto);
+      const cacheKey = this.generateCacheKey('friends:list', userId, dto);
 
       // 캐시 확인
       const cached = await this.cacheManager.get(cacheKey);
@@ -156,16 +144,41 @@ export class FriendsService {
     }
   }
 
-  private generateCacheKey(userId: number, dto: GetFriendsDto): string {
-    const params = [
-      userId,
-      dto.page,
-      dto.limit,
-      dto.search || '',
-      dto.sortBy || 'createdAt',
-    ].join(':');
+  private generateCacheKey(
+    keyType: string,
+    userId: number,
+    dto: GetFriendsDto | GetCommonGamesDto,
+  ): string {
+    const params: (string | number)[] = [userId];
 
-    return `friends:list:${params}`;
+    // 공통 속성 추가
+    if (dto.page !== undefined && dto.page !== null) {
+      params.push(dto.page);
+    }
+    if (dto.limit !== undefined && dto.limit !== null) {
+      params.push(dto.limit);
+    }
+
+    // GetFriendsDto 속성 처리
+    if ('search' in dto && typeof dto.search !== 'undefined') {
+      params.push(dto.search || '');
+    }
+    if ('sortBy' in dto && typeof dto.sortBy !== 'undefined') {
+      params.push(dto.sortBy || 'createdAt');
+    }
+
+    // friendId 처리 (getCommonGames에서 사용)
+    function isCommonGamesDto(
+      dto: GetFriendsDto | GetCommonGamesDto,
+    ): dto is GetCommonGamesDto {
+      return 'friendId' in dto;
+    }
+
+    if (isCommonGamesDto(dto) && dto.friendId != null) {
+      params.push(dto.friendId);
+    }
+
+    return `${keyType}:${params.join(':')}`;
   }
 
   async invalidateFriendsCacheForUser(userId: number): Promise<void> {
@@ -304,10 +317,10 @@ export class FriendsService {
   ): Promise<PaginatedResponse<Game>> {
     try {
       const cacheKey = this.generateCacheKey(
-        userId,
-        { ...query, friendId: friendId },
         'common:games',
-      );
+        userId,
+        Object.assign({}, query, { friendId }), // Object.assign 메서드 사용
+      ); // 명시적으로 속성 이름과 값을 모두 작성
 
       // 1. 캐시 확인: Promise를 반환하므로 await 사용
       const cached = await this.cacheManager.get(cacheKey);
@@ -362,33 +375,34 @@ export class FriendsService {
       const total = await qb.getCount();
 
       // 페이지네이션 및 정렬 로직 (동기적)
-      const skip = (query.page - 1) * query.limit;
-      qb.skip(skip).take(query.limit);
+      // 페이지네이션 기본값 적용 (undefined 방어)
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 10;
+      const skip = (page - 1) * limit;
 
-      if (query.sortBy && query.sortOrder) {
-        qb.orderBy(
-          `game.${query.sortBy}`,
-          query.sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
-        );
-      } else {
-        qb.orderBy('game.name', 'ASC');
+      // 2️⃣ 쿼리 빌더에 적용
+      qb.skip(skip).take(limit);
+
+      // 3️⃣ 정렬
+      if (query.sortBy) {
+        qb.orderBy(`game.${query.sortBy}`, query.ascending ? 'ASC' : 'DESC');
       }
 
-      // 6. 실제 공통 게임 데이터 조회: Promise를 반환하므로 await 사용
+      // 4️⃣ 데이터 조회
       const commonGames = await qb.getMany();
 
+      // 5️⃣ 응답 구성
       const response: PaginatedResponse<Game> = {
         data: commonGames,
         meta: {
-          page: query.page,
-          limit: query.limit,
+          page,
+          limit,
           total,
-          totalPages: Math.ceil(total / query.limit),
-          hasNext: skip + query.limit < total,
-          hasPrev: query.page > 1,
+          totalPages: Math.ceil(total / limit),
+          hasNext: skip + limit < total,
+          hasPrev: page > 1,
         },
       };
-
       // 7. 캐시 저장: Promise를 반환하므로 await 사용
       await this.cacheManager.set(cacheKey, response, this.CACHE_TTL);
       return response;
