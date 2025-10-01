@@ -7,5 +7,5 @@ export class SummaryDto {
   total_playtime_minutes: number;
   recent_playtime_2weeks_minutes: number;
   most_played_game: GameDto;
-  last_played_at: string;
+  last_played_at: Date;
 }

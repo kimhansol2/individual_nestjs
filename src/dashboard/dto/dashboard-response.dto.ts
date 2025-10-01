@@ -22,6 +22,6 @@ export class DashboardDataDto {
 
 // 대시보드 응답 구조 정의
 export class DashboardResponseDto {
-  data: DashboardDataDto;
+  data: DashboardDataDto | null;
   error: string | null;
 }
