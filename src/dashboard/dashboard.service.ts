@@ -20,7 +20,7 @@ export class DashboardService {
     };
 
     // 최근 플레이한 게임 목록
-    const recentlyPlayed: GameDto[] = dummyData.recentlyPlayed.map(g => ({
+    const recentlyPlayed: GameDto[] = dummyData.recentlyPlayed.map((g) => ({
       gameId: g.gameId,
       title: g.title,
       gameImage: g.gameImage,
@@ -35,8 +35,14 @@ export class DashboardService {
         // 내 계정 전체 정보
         summary: {
           total_games: dummyData.ownedGames.length,
-          total_playtime_minutes: dummyData.ownedGames.reduce((sum, g) => sum + g.playtime_forever, 0),
-          recent_playtime_2weeks_minutes: dummyData.recentlyPlayed.reduce((sum, g) => sum + g.playtime_2weeks, 0),
+          total_playtime_minutes: dummyData.ownedGames.reduce(
+            (sum, g) => sum + g.playtime_forever,
+            0,
+          ),
+          recent_playtime_2weeks_minutes: dummyData.recentlyPlayed.reduce(
+            (sum, g) => sum + g.playtime_2weeks,
+            0,
+          ),
           most_played_game: mostPlayed,
           last_played_at: recentlyPlayed[0]?.last_played_at || '',
         },
@@ -44,7 +50,11 @@ export class DashboardService {
         recently_played: recentlyPlayed,
         achievement_progress: { earned: 0, total: 0, ratio: 0 },
         friends: { count: dummyData.friends.length, list: dummyData.friends },
-        quick_links: { games: '/games', friends: '/friends', achievements: '/achievements' },
+        quick_links: {
+          games: '/games',
+          friends: '/friends',
+          achievements: '/achievements',
+        },
       },
       error: null,
     };

@@ -44,4 +44,11 @@ export class UsersRepository {
   async findById(id: number): Promise<User | null> {
     return this.repo.findOne({ where: { id } });
   }
+
+  async updateProfile(
+    userId: number,
+    patch: { personaName?: string | null; avatar?: string | null },
+  ): Promise<void> {
+    await this.repo.save({ id: userId, ...patch });
+  }
 }

@@ -17,8 +17,8 @@ export class User {
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 17 })
   steamId!: string;
-  @Column({ nullable: true }) personaName?: string;
-  @Column({ nullable: true }) avatar?: string;
+  @Column({ nullable: true }) personaName!: string | null;
+  @Column({ nullable: true }) avatar!: string | null;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })

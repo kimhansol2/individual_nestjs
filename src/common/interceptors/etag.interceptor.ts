@@ -4,16 +4,13 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
-import { Observable, of } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { Observable, of, EMPTY } from 'rxjs';
+import { mergeMap } from 'rxjs/operators';
 import { createHash } from 'crypto';
 
 @Injectable()
-export class EtagInterceptor implements NestInterceptor {
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler<any>,
-  ): Observable<any> {
+export class EtagInterceptor<T> implements NestInterceptor<T, T> {
+  intercept(context: ExecutionContext, next: CallHandler<T>): Observable<T> {
     const req = context.switchToHttp().getRequest();
     const res = context.switchToHttp().getResponse();
 
@@ -25,18 +22,22 @@ export class EtagInterceptor implements NestInterceptor {
     const ifNoneMatch = req.headers['if-none-match'];
 
     return next.handle().pipe(
-      tap((body) => {
+      mergeMap((body: T) => {
         // 응답 바디 해시로 ETag 생성
         const etag =
           '"' +
           createHash('sha1').update(JSON.stringify(body)).digest('hex') +
           '"';
 
+        //미리 ETag를 내려준다.
         res.setHeader('ETag', etag);
 
         if (ifNoneMatch && ifNoneMatch === etag) {
           res.status(304).end();
+          return EMPTY as unknown as Observable<T>;
         }
+
+        return of(body);
       }),
     );
   }
