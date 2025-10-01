@@ -9,20 +9,20 @@ import {
 @Entity('friends')
 export class Friend {
   @PrimaryGeneratedColumn()
-  id: number;
+  id!: number;
 
   @Column()
-  userId: number;
+  userId!: number;
 
   @Column()
-  friendId: number;
+  friendId!: number;
 
   @Column({ default: 'pending' })
-  status: 'pending' | 'accepted' | 'blocked';
+  status!: 'pending' | 'accepted' | 'blocked';
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 }
