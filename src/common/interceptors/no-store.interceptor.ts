@@ -7,9 +7,7 @@ import {
 import { Observable } from 'rxjs';
 
 @Injectable()
-export class NoStoreIfAuthedInterceptor
-  implements NestInterceptor<unknown, unknown>
-{
+export class NoStoreInterceptor implements NestInterceptor<unknown, unknown> {
   intercept(
     context: ExecutionContext,
     next: CallHandler<unknown>,
