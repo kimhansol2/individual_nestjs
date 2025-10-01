@@ -29,18 +29,11 @@ export class UserAchievement {
   @ManyToOne(() => Achievement, (achievement) => achievement.userAchievements, {
     onDelete: 'CASCADE',
   })
-<<<<<<< HEAD
   @JoinColumn([
     { name: 'apiName', referencedColumnName: 'apiName' },
     { name: 'gameId', referencedColumnName: 'gameId' },
   ])
   achievement!: Achievement;
-=======
-  // @JoinColumn({ name: 'apiName' })
-  // achievement: Achievement;
-  @JoinColumn({ name: 'apiName', referencedColumnName: 'apiName' })
-  achievement: Achievement;
->>>>>>> 84c3cb9f53e4f08f6fd942ac41520023c5178e10
   @ManyToOne(() => User, (user) => user.userAchievements, {
     onDelete: 'CASCADE',
   })
