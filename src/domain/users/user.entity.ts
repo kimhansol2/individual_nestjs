@@ -13,21 +13,23 @@ import { Friend } from './user-friend.entity';
 
 @Entity()
 export class User {
-  @PrimaryGeneratedColumn() id: number;
-  @Index({ unique: true }) @Column() steamId: string;
-  @Column({ nullable: true }) personaName: string;
-  @Column({ nullable: true }) avatar?: string;
+  @PrimaryGeneratedColumn() id!: number;
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 17 })
+  steamId!: string;
+  @Column({ nullable: true }) personaName!: string | null;
+  @Column({ nullable: true }) avatar!: string | null;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @OneToMany(() => OwnedGame, (og) => og.user, { cascade: false })
-  ownedGames: OwnedGame[];
+  ownedGames!: OwnedGame[];
   @OneToMany(() => UserAchievement, (UserA) => UserA.user, { cascade: false })
-  userAchievements: UserAchievement[];
+  userAchievements!: UserAchievement[];
   @OneToMany(() => Friend, (friend) => friend.user, { cascade: false })
-  friends: Friend[];
-  @OneToMany(() => Friend, (friend) => friend.user, { cascade: false })
-  friendedBy: Friend[];
+  friends!: Friend[];
+  @OneToMany(() => Friend, (friend) => friend.friend, { cascade: false })
+  friendedBy!: Friend[];
 }

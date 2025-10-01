@@ -15,6 +15,11 @@ import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
+import { RedisModule } from './infra/redis/redis.module';
+import { HealthController } from './infra/redis/redis-health.controller';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
+import { CacheAsideModule } from './common/cache/cache-aside.module';
 
 @Module({
   imports: [
@@ -27,7 +32,12 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
         PORT: Joi.number().default(3000),
         STEAM_API_KEY: Joi.string().required(),
         STEAM_REALM: Joi.string().uri().required(),
-        STEAM_RETURN_URL: Joi.string().uri().required(),
+        STEAM_RETURN_TO: Joi.string().uri().required(),
+        JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+        JWT_EXPIRES_IN: Joi.string().default('15m'),
+        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+        JWT_REFRESH_EXPIRES_IN: Joi.string().default('3d'),
+        REDIS_URL: Joi.string().required(),
       }),
     }),
     TypeOrmModule.forRootAsync({
@@ -39,11 +49,23 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
         autoLoadEntities: true,
-        synchronize: false,
+        synchronize: true,
         logging: process.env.TYPEORM_LOGGING === 'true',
-        migrationsRun: process.env.TYPEORM_MIGRATIONS_RUN === 'true',
         migrations: ['dist/migrations/*.js'],
+        migrationsTransactionMode: 'each',
+
         entities: [OwnedGame, Game, User, Achievement, UserAchievement],
+      }),
+    }),
+
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: async () => ({
+        store: await redisStore({
+          url: process.env.REDIS_URL,
+        }),
+        ttl: 30,
+        max: 0,
       }),
     }),
     SteamModule,
@@ -52,8 +74,10 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
     UsersModule,
     AchievementsModule,
     GameDomainModule,
+    RedisModule,
+    CacheAsideModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}

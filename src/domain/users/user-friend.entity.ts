@@ -14,23 +14,23 @@ import { User } from './user.entity';
 @Entity()
 @Unique(['userId', 'friendId'])
 export class Friend {
-  @PrimaryGeneratedColumn() id: number;
-  @Index() @Column() userId: number;
-  @Index() @Column() friendId: number;
+  @PrimaryGeneratedColumn() id!: number;
+  @Index() @Column() userId!: number;
+  @Index() @Column() friendId!: number;
 
   @Column({ name: 'friend_since', type: 'timestamptz', nullable: true })
-  friendSince: Date | null;
+  friendSince!: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-  createdAt: Date;
+  createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ManyToOne(() => User, (user) => user.friends, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
-  user: User;
+  user!: User;
 
   @ManyToOne(() => User, (user) => user.friendedBy, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'friendId' })
-  friend: User;
+  friend!: User;
 }
