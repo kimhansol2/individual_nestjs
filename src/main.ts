@@ -8,4 +8,7 @@ async function bootstrap() {
   app.use(cookieParser(process.env.COOKIE_SECRET));
   await app.listen(process.env.PORT ?? 3000);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('Fatal bootstrap error:', err);
+  process.exit(1);
+});

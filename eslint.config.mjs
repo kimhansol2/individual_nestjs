@@ -6,19 +6,22 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs'],
+    ignores: ['dist/**', 'node_modules/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   eslintPluginPrettierRecommended,
   {
+    files: ['**/*.ts'],
     languageOptions: {
+      parser: tseslint.parser,
       globals: {
         ...globals.node,
         ...globals.jest,
       },
       sourceType: 'commonjs',
       parserOptions: {
+        project: ['./tsconfig.eslint.json'],
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },

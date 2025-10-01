@@ -22,7 +22,6 @@ import { ListMyGamesDto } from './dto/list-my-games.dto';
 import { UserId } from 'src/auth/user-id.decorator';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { NoStoreInterceptor } from 'src/common/interceptors/no-store.interceptor';
-import { UserScopedCacheInterceptor } from 'src/common/interceptors/user-cache.interceptor';
 
 @ApiTags('me')
 @ApiBearerAuth()
