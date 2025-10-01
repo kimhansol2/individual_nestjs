@@ -6,14 +6,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { AuthUser } from '../auth/auth.types'; // 경로가 정확한지 확인해 주세요
 
+// AuthUser 타입을 직접 사용하도록 수정
 interface RequestWithUser extends Request {
-  user?: {
-    id: string;
-    email?: string;
-    role?: string;
-    // 필요에 따라 user 객체 구조에 맞게 추가 필드를 선언하세요
-  };
+  user?: AuthUser; // 기존 객체 정의 대신 AuthUser 타입 사용
 }
 
 @Injectable()

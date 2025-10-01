@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { CacheModule } from '@nestjs/cache-manager';
 import { TypeOrmModule } from '@nestjs/typeorm'; // TypeOrmModule 추가
-import { FriendsController } from '../../my friends/friends.controller';
-import { FriendsService } from '../../my friends/friends.service';
+import { FriendsController } from '../../myfriends/friends.controller';
+import { FriendsService } from '../../myfriends/friends.service';
 // FriendsEntity를 도메인 폴더에서 가져옵니다.
 import { Friend } from './friends.entity'; // 👈 FriendsService가 사용하는 엔티티
 

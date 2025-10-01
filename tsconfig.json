@@ -28,6 +28,6 @@
       "src/*": ["src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/@types/**/*.d.ts"],
+  "include": ["src/**/*.ts", "src/@types/**/*.d.ts",  "src/myfriends/**/*.ts"],
   "exclude": ["**/*.spec.ts", "test/**"]
 }
