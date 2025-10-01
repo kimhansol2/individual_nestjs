@@ -12,21 +12,36 @@ type GetOrLoadOptions = {
   lockMs?: number;
 };
 
-interface RedisStoreWithClient {
-  getClient(): Redis;
-}
+type RedisStoreLike = { getClient: () => Redis };
+const hasGetClient = (x: unknown): x is RedisStoreLike => {
+  const o = x as { getClient?: unknown } | null;
+  return !!o && typeof o.getClient === 'function';
+};
 
 @Injectable()
 export class CacheAsideService {
   constructor(@Inject(CACHE_MANAGER) private readonly cache: Cache) {}
 
-  private get redis(): Redis {
-    const store = this.cache.stores as unknown as RedisStoreWithClient;
-    return store.getClient();
+  private get redis(): Redis | null {
+    const storeUnknown = Reflect.get(this.cache as object, 'store') as unknown;
+    return hasGetClient(storeUnknown) ? storeUnknown.getClient() : null;
   }
 
   private async sleep(ms: number) {
     await new Promise<void>((r) => setTimeout(r, ms));
+  }
+
+  private asArray(v?: string | string[]) {
+    return Array.isArray(v) ? v : v ? [v] : [];
+  }
+
+  private async addToIndices(
+    indices: string[],
+    key: string,
+    client: Redis | null,
+  ) {
+    if (!client || indices.length === 0) return;
+    await Promise.all(indices.map((idx) => client.sadd(idx, key)));
   }
 
   // Cache-Aside(+single-flight) 핵심
@@ -41,8 +56,12 @@ export class CacheAsideService {
     const lockKey = `lock:${key}`;
     const lockMs = opts.lockMs ?? 5000;
 
+    const client = this.redis;
+
     //SET NX PX로 락 시도
-    const locked = await this.redis.set(lockKey, '1', 'PX', lockMs, 'NX');
+    const locked = client
+      ? await client.set(lockKey, '1', 'PX', lockMs, 'NX')
+      : 'OK';
     if (locked) {
       try {
         const data = await loader();
@@ -52,16 +71,12 @@ export class CacheAsideService {
         else await this.cache.set(key, data);
 
         //인덱스 등록
-        const indices = Array.isArray(opts.index)
-          ? opts.index
-          : opts.index
-            ? [opts.index]
-            : [];
-        await Promise.all(indices.map((idx) => this.redis.sadd(idx, key)));
+        const indices = this.asArray(opts.index);
+        await this.addToIndices(indices, key, client);
 
         return data;
       } finally {
-        await this.redis.del(lockKey);
+        if (client) await client.del(lockKey);
       }
     }
 
@@ -75,13 +90,8 @@ export class CacheAsideService {
     if (opts.ttlSec !== undefined) await this.cache.set(key, data, opts.ttlSec);
     else await this.cache.set(key, data);
 
-    const indices = Array.isArray(opts.index)
-      ? opts.index
-      : opts.index
-        ? [opts.index]
-        : [];
-    await Promise.all(indices.map((idx) => this.redis.sadd(idx, key)));
-
+    const indices = this.asArray(opts.index);
+    await this.addToIndices(indices, key, client);
     return data;
   }
 
@@ -91,9 +101,13 @@ export class CacheAsideService {
 
   // 인덱스 기반 무효화 (세트에 등록된 모든 키 삭제 후 세트 제거)
   async invalidateByIndex(index: string): Promise<void> {
-    const keys = await this.redis.smembers(index);
-    if (keys.length) await this.redis.del(...keys);
-    await this.redis.del(index);
+    const client = this.redis;
+    if (!client) return;
+    const keys = await client.smembers(index);
+    if (keys.length) {
+      await Promise.all(keys.map((k) => this.cache.del(k)));
+    }
+    await client.del(index);
   }
 
   // 여러 인덱스를 한번에 무효화

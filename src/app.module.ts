@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
@@ -18,7 +18,7 @@ import { UserAchievement } from './domain/achievements/user-achievement.entity';
 import { RedisModule } from './infra/redis/redis.module';
 import { HealthController } from './infra/redis/redis-health.controller';
 import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-redis-yet';
+import { redisStore } from 'cache-manager-ioredis-yet';
 import { CacheAsideModule } from './common/cache/cache-aside.module';
 
 @Module({
@@ -57,15 +57,15 @@ import { CacheAsideModule } from './common/cache/cache-aside.module';
         entities: [OwnedGame, Game, User, Achievement, UserAchievement],
       }),
     }),
-
     CacheModule.registerAsync({
       isGlobal: true,
-      useFactory: async () => ({
+      inject: [ConfigService],
+      useFactory: async (cfg: ConfigService) => ({
+        ttl: 0,
         store: await redisStore({
-          url: process.env.REDIS_URL,
+          url: cfg.getOrThrow<string>('REDIS_URL'),
+          keyPrefix: 'app:',
         }),
-        ttl: 30,
-        max: 0,
       }),
     }),
     SteamModule,
