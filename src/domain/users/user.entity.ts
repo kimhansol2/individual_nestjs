@@ -14,7 +14,9 @@ import { Friend } from './user-friend.entity';
 @Entity()
 export class User {
   @PrimaryGeneratedColumn() id: number;
-  @Index({ unique: true }) @Column() steamId: string;
+  @Index({ unique: true })
+  @Column({ type: 'varchar', length: 17 })
+  steamId: string;
   @Column({ nullable: true }) personaName: string;
   @Column({ nullable: true }) avatar?: string;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

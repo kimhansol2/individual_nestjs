@@ -15,7 +15,9 @@ import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
-import { DashboardModule } from './dashboard/dashboard.module';
+import { RedisModule } from './infra/redis/redis.module';
+import { HealthController } from './infra/redis/redis-health.controller';
+import { SteamAuthController } from './auth/auth.controller';
 
 @Module({
   imports: [
@@ -29,6 +31,11 @@ import { DashboardModule } from './dashboard/dashboard.module';
         STEAM_API_KEY: Joi.string().required(),
         STEAM_REALM: Joi.string().uri().required(),
         STEAM_RETURN_TO: Joi.string().uri().required(),
+        JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+        JWT_EXPIRES_IN: Joi.string().default('15m'),
+        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+        JWT_REFERSH_EXPIRES_IN: Joi.string().default('3d'),
+        REDIS_URL: Joi.string().required(),
       }),
     }),
     TypeOrmModule.forRootAsync({
@@ -43,8 +50,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
         synchronize: true,
         logging: process.env.TYPEORM_LOGGING === 'true',
         migrations: ['dist/migrations/*.js'],
-        migrationsRun: false,
         migrationsTransactionMode: 'each',
+
         entities: [OwnedGame, Game, User, Achievement, UserAchievement],
       }),
     }),
@@ -54,9 +61,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
     UsersModule,
     AchievementsModule,
     GameDomainModule,
-    DashboardModule,
+    RedisModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController, SteamAuthController],
   providers: [AppService],
 })
 export class AppModule {}

@@ -1,0 +1,309 @@
+import { Inject, Injectable, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
+import Redis from 'ioredis';
+import { randomBytes, createHash } from 'crypto';
+import { errorSummary } from 'src/common/error.util';
+import { JwtService } from '@nestjs/jwt';
+import { UsersRepository } from 'src/domain/users/users.repository';
+import { User } from 'src/domain/users/user.entity';
+import { UnauthorizedException } from '@nestjs/common';
+
+const OP = 'https://steamcommunity.com/openid/login';
+
+type ExecReply = [Error | null, unknown];
+
+@Injectable()
+export class SteamOpenIdService {
+  private readonly realm: string;
+  private readonly returnTo: string;
+  private readonly accessSecret: string;
+  private readonly refreshSecret: string;
+  private readonly accessTtlSec: number;
+  private readonly refreshTtlSec: number;
+
+  constructor(
+    private readonly cfg: ConfigService,
+    @Inject('REDIS') private readonly redis: Redis,
+    private readonly jwt: JwtService,
+    private readonly usersRepo: UsersRepository,
+  ) {
+    this.realm = this.cfg.getOrThrow<string>('STEAM_REALM');
+    this.returnTo = this.cfg.getOrThrow<string>('STEAM_RETURN_TO');
+    this.accessSecret = this.cfg.getOrThrow<string>('JWT_ACCESS_SECRET');
+    this.refreshSecret = this.cfg.getOrThrow<string>('JWT_REFRESH_SECRET');
+    this.accessTtlSec = Number(this.cfg.get('JWT_EXPIRES_IN', '900'));
+    this.refreshTtlSec = Number(
+      this.cfg.get('JWT_REFRESH_EXPIRES_IN', '259200'),
+    );
+  }
+
+  // 로그인 시작 URL 생성
+  async buildRedirectUrl(): Promise<string> {
+    const state = randomBytes(16).toString('hex');
+    const nonce = randomBytes(16).toString('hex');
+
+    // 10분 TTL
+    const replies = await this.redis
+      .multi()
+      .set(`oid:state:${state}`, '1', 'EX', 600, 'NX')
+      .set(`oid:nonce:${nonce}`, '1', 'EX', 600, 'NX')
+      .exec();
+
+    if (!replies) throw new BadRequestException('redis transaction aborted');
+
+    const ok1 = (replies[0] as ExecReply)[1] === 'OK';
+    const ok2 = (replies[1] as ExecReply)[1] === 'OK';
+
+    if (!ok1 || !ok2)
+      throw new BadRequestException('failed to save state/nonce');
+
+    //return_to에 state/nonce를 심어 보냄(콜백에서 그대로 돌아옴)
+    const rt = new URL(this.returnTo);
+    rt.searchParams.set('state', state);
+    rt.searchParams.set('nonce', nonce);
+
+    const params = new URLSearchParams({
+      'openid.ns': 'http://specs.openid.net/auth/2.0',
+      'openid.mode': 'checkid_setup',
+      'openid.return_to': rt.toString(),
+      'openid.realm': this.realm,
+      'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+      'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
+    });
+    return `${OP}?${params.toString()}`;
+  }
+
+  private async ensureUser(
+    steamid64: string,
+    patch?: { personaName?: string | null; avatar?: string | null },
+  ): Promise<User> {
+    return this.usersRepo.upsertBySteamId(steamid64, patch);
+  }
+
+  async finalizeLogin(query: Record<string, string>): Promise<{
+    user: Pick<User, 'id' | 'steamId' | 'personaName' | 'avatar'>;
+    accessToken: string;
+    accessTokenExpiresIn: number;
+    refreshToken: string;
+    refreshTokenMaxAgeMs: number;
+  }> {
+    // OpenID 콜백 검증 + SteamID64 추출
+    const { steamid64 } = await this.verifyCallback(query);
+
+    let personaName: string | null = null;
+    let avatar: string | null = null;
+
+    const steamKey = this.cfg.get<string>('STEAM_API_KEY');
+    if (steamKey) {
+      try {
+        const { data } = await axios.get(
+          'https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/',
+          {
+            params: { key: steamKey, steamids: steamid64 },
+            timeout: 5000,
+          },
+        );
+
+        const player = data?.response?.players?.[0];
+
+        personaName = player?.personaname ?? null;
+        avatar = player?.avatarfull ?? null;
+      } catch {}
+    }
+
+    // 유저 upsert (프로필 함께 패치)
+    const user = await this.ensureUser(steamid64, { personaName, avatar });
+
+    // 토큰 발급
+    const { token: accessToken } = await this.signAccessToken(user.id);
+    const { token: refreshToken, jti } = await this.signRefreshToken(user.id);
+
+    await this.storeRefreshToken(jti, user.id, refreshToken);
+
+    return {
+      user: {
+        id: user.id,
+        steamId: user.steamId,
+        personaName: user.personaName,
+        avatar: user.avatar,
+      },
+      accessToken,
+      accessTokenExpiresIn: this.accessTtlSec,
+      refreshToken,
+      refreshTokenMaxAgeMs: this.refreshTtlSec * 1000,
+    };
+  }
+
+  private async signAccessToken(userId: number): Promise<{ token: string }> {
+    const payload = { sub: userId, typ: 'access' };
+    const token = await this.jwt.signAsync(payload, {
+      secret: this.accessSecret,
+      expiresIn: this.accessTtlSec,
+    });
+    return { token };
+  }
+
+  private async signRefreshToken(
+    userId: number,
+  ): Promise<{ token: string; jti: string }> {
+    const jti = randomBytes(16).toString('hex');
+    const payload = { sub: userId, jti, typ: 'refresh' };
+    const token = await this.jwt.signAsync(payload, {
+      secret: this.refreshSecret,
+      expiresIn: this.refreshTtlSec,
+    });
+    return { token, jti };
+  }
+
+  private async storeRefreshToken(jti: string, userId: number, token: string) {
+    const hash = createHash('sha256').update(token).digest('hex');
+    await this.redis.set(
+      `rt:${jti}`,
+      JSON.stringify({ userId, hash }),
+      'EX',
+      this.refreshTtlSec,
+      'NX',
+    );
+  }
+
+  async rotateRefreshToken(oldToken: string): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    refreshTokenMaxAgeMs: number;
+  }> {
+    // refresh JWT 검증
+    const decoded = await this.jwt
+      .verifyAsync(oldToken, {
+        secret: this.refreshSecret,
+      })
+      .catch(() => {
+        throw new UnauthorizedException('invalid refresh token');
+      });
+
+    const userId = decoded?.sub as number;
+    const jti = decoded?.jti as string;
+    if (!userId || !jti)
+      throw new UnauthorizedException('malformed refresh token');
+
+    // redis에 저장된 해시와 일치하는지 확인
+    const entry = await this.redis.get(`rt:${jti}`);
+    if (!entry) throw new UnauthorizedException('refresh revoked/expired');
+
+    const { hash } = JSON.parse(entry);
+    const givenHash = createHash('sha256').update(oldToken).digest('hex');
+    if (hash !== givenHash) throw new UnauthorizedException('refresh mismatch');
+
+    //회전: 기존 키 삭제 -> 새 토큰 발급 -> 새 키 저장
+    await this.redis.del(`rt:${jti}`);
+
+    const { token: accessToken } = await this.signAccessToken(userId);
+    const { token: refreshToken, jti: newJti } =
+      await this.signRefreshToken(userId);
+    await this.storeRefreshToken(newJti, userId, refreshToken);
+
+    return {
+      accessToken,
+      refreshToken,
+      refreshTokenMaxAgeMs: this.refreshTtlSec * 1000,
+    };
+  }
+
+  // 콜백 검증 + SteamID64 추출
+  async verifyCallback(
+    query: Record<string, string>,
+  ): Promise<{ steamid64: string; state?: string }> {
+    try {
+      const mode = query['openid.mode'];
+      if (mode !== 'id_res')
+        throw new BadRequestException('invalid openid mode');
+
+      // op_endpoint 고정
+      if (query['openid.op_endpoint'] && query['openid.op_endpoint'] !== OP) {
+        throw new BadRequestException('unexpected op_endpoint');
+      }
+
+      // return_to 체크(우리 콜백 URL과 완전 동일해야함)
+      const returnTo = query['openid.return_to'];
+      if (!returnTo) throw new BadRequestException('missing return_to');
+
+      const rt = new URL(returnTo);
+      const base = new URL(this.returnTo);
+      const sameBase =
+        rt.origin === base.origin && rt.pathname === base.pathname;
+      if (!sameBase) throw new BadRequestException('return_to mismatch');
+      // state, nonce 체크
+      const state = rt.searchParams.get('state') ?? query['state'];
+      const nonce = rt.searchParams.get('nonce') ?? query['nonce'];
+      if (!state) throw new BadRequestException('state missing');
+
+      const opNonce = query['openid.response_nonce'];
+      if (!opNonce) throw new BadRequestException('response_nonce missing');
+
+      const multi = this.redis.multi().del(`oid:state:${state}`);
+      if (nonce) multi.del(`oid:nonce:${nonce}`);
+      multi.set(`oid:opnonce:${opNonce}`, '1', 'EX', 600, 'NX');
+
+      const results = await multi.exec();
+      if (!results) throw new BadRequestException('transaction aborted');
+
+      let i = 0;
+
+      const take = () => results[i++] as ExecReply;
+
+      //DEL state
+      const [err1, v1] = take();
+      const delStateOk = err1 === null && v1 === 1;
+      if (!delStateOk) {
+        throw new BadRequestException('unknown or reused state');
+      }
+
+      if (nonce) {
+        const [err2, v2] = take();
+        const delOurNonceOk = err2 === null && v2 === 1;
+        if (!delOurNonceOk) {
+          throw new BadRequestException('unknown or reused nonce');
+        }
+      }
+
+      const [err3, v3] = take();
+      const setOpNonceOk = err3 === null && v3 === 'OK';
+      if (!setOpNonceOk) {
+        throw new BadRequestException('replay detected (response_nonce)');
+      }
+
+      // OpenID 서명 검증 요청 본문 만들기
+      const body = new URLSearchParams();
+
+      for (const [k, v] of Object.entries(query)) {
+        if (k.startsWith('openid.') && k !== 'openid.mode') {
+          body.append(k, v);
+        }
+      }
+
+      //마지막에 단 한 번만 check_authentication 지정
+      body.set('openid.mode', 'check_authentication');
+
+      const { data } = await axios.post(OP, body, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 7000,
+      });
+
+      const isValid =
+        typeof data === 'string' && data.includes('is_valid:true');
+      if (!isValid) throw new BadRequestException('invalid openid signature');
+
+      // steamid64 파싱
+      const claimed = query['openid.claimed_id'] ?? '';
+      const match = claimed.match(/\/id\/(\d{17})$|\/openid\/id\/(\d{17})$/);
+      const steamid64 = match?.[1] ?? match?.[2];
+      if (!steamid64) throw new BadRequestException('steamid parse failed');
+
+      return { steamid64, state: state || undefined };
+    } catch (e: unknown) {
+      throw new BadRequestException(
+        `OpenID verification failed: ${errorSummary(e)}`,
+      );
+    }
+  }
+}
