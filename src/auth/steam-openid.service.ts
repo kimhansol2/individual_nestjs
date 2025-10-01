@@ -11,7 +11,31 @@ import { UnauthorizedException } from '@nestjs/common';
 
 const OP = 'https://steamcommunity.com/openid/login';
 
-type ExecReply = [Error | null, unknown];
+type PipelineResult = [err: Error | null, res: 'OK' | number | null];
+
+function parseRefreshEntry(json: string): { userId: number; hash: string } {
+  const obj: unknown = JSON.parse(json);
+  if (!obj || typeof obj !== 'object') {
+    throw new UnauthorizedException('refresh payload malformed');
+  }
+  const u = (obj as Record<string, unknown>)['userId'];
+  const h = (obj as Record<string, unknown>)['hash'];
+
+  if (typeof u !== 'number' || typeof h !== 'string') {
+    throw new UnauthorizedException('refresh payload malformed');
+  }
+  return { userId: u, hash: h };
+}
+
+interface SteamSummaries {
+  response: { players: Array<{ personaname?: string; avatarfull?: string }> };
+}
+
+interface RefreshPayload {
+  sub: number;
+  jti?: string;
+  typ?: 'refresh';
+}
 
 @Injectable()
 export class SteamOpenIdService {
@@ -44,16 +68,16 @@ export class SteamOpenIdService {
     const nonce = randomBytes(16).toString('hex');
 
     // 10분 TTL
-    const replies = await this.redis
+    const replies = (await this.redis
       .multi()
       .set(`oid:state:${state}`, '1', 'EX', 600, 'NX')
       .set(`oid:nonce:${nonce}`, '1', 'EX', 600, 'NX')
-      .exec();
+      .exec()) as PipelineResult[] | null;
 
     if (!replies) throw new BadRequestException('redis transaction aborted');
 
-    const ok1 = (replies[0] as ExecReply)[1] === 'OK';
-    const ok2 = (replies[1] as ExecReply)[1] === 'OK';
+    const ok1 = replies[0][1] === 'OK';
+    const ok2 = replies[1][1] === 'OK';
 
     if (!ok1 || !ok2)
       throw new BadRequestException('failed to save state/nonce');
@@ -97,7 +121,7 @@ export class SteamOpenIdService {
     const steamKey = this.cfg.get<string>('STEAM_API_KEY');
     if (steamKey) {
       try {
-        const { data } = await axios.get(
+        const { data } = await axios.get<SteamSummaries>(
           'https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/',
           {
             params: { key: steamKey, steamids: steamid64 },
@@ -107,9 +131,13 @@ export class SteamOpenIdService {
 
         const player = data?.response?.players?.[0];
 
-        personaName = player?.personaname ?? null;
-        avatar = player?.avatarfull ?? null;
-      } catch {}
+        personaName =
+          typeof player?.personaname === 'string' ? player.personaname : null;
+        avatar =
+          typeof player?.avatarfull === 'string' ? player.avatarfull : null;
+      } catch {
+        /* optional enrichment failed, ignore */
+      }
     }
 
     // 유저 upsert (프로필 함께 패치)
@@ -174,15 +202,15 @@ export class SteamOpenIdService {
   }> {
     // refresh JWT 검증
     const decoded = await this.jwt
-      .verifyAsync(oldToken, {
+      .verifyAsync<RefreshPayload>(oldToken, {
         secret: this.refreshSecret,
       })
       .catch(() => {
         throw new UnauthorizedException('invalid refresh token');
       });
 
-    const userId = decoded?.sub as number;
-    const jti = decoded?.jti as string;
+    const userId = decoded.sub;
+    const jti = decoded.jti;
     if (!userId || !jti)
       throw new UnauthorizedException('malformed refresh token');
 
@@ -190,9 +218,11 @@ export class SteamOpenIdService {
     const entry = await this.redis.get(`rt:${jti}`);
     if (!entry) throw new UnauthorizedException('refresh revoked/expired');
 
-    const { hash } = JSON.parse(entry);
+    const { userId: storedUserId, hash } = parseRefreshEntry(entry);
     const givenHash = createHash('sha256').update(oldToken).digest('hex');
     if (hash !== givenHash) throw new UnauthorizedException('refresh mismatch');
+    if (storedUserId !== userId)
+      throw new UnauthorizedException('refresh subject mismatch');
 
     //회전: 기존 키 삭제 -> 새 토큰 발급 -> 새 키 저장
     await this.redis.del(`rt:${jti}`);
@@ -244,29 +274,33 @@ export class SteamOpenIdService {
       if (nonce) multi.del(`oid:nonce:${nonce}`);
       multi.set(`oid:opnonce:${opNonce}`, '1', 'EX', 600, 'NX');
 
-      const results = await multi.exec();
+      const results = (await multi.exec()) as PipelineResult[] | null;
       if (!results) throw new BadRequestException('transaction aborted');
 
       let i = 0;
 
-      const take = () => results[i++] as ExecReply;
+      const next = (): PipelineResult => {
+        const item = results[i++];
+        if (!item) throw new BadRequestException('transaction aborted');
+        return item;
+      };
 
       //DEL state
-      const [err1, v1] = take();
+      const [err1, v1] = next();
       const delStateOk = err1 === null && v1 === 1;
       if (!delStateOk) {
         throw new BadRequestException('unknown or reused state');
       }
 
       if (nonce) {
-        const [err2, v2] = take();
+        const [err2, v2] = next();
         const delOurNonceOk = err2 === null && v2 === 1;
         if (!delOurNonceOk) {
           throw new BadRequestException('unknown or reused nonce');
         }
       }
 
-      const [err3, v3] = take();
+      const [err3, v3] = next();
       const setOpNonceOk = err3 === null && v3 === 'OK';
       if (!setOpNonceOk) {
         throw new BadRequestException('replay detected (response_nonce)');
@@ -284,7 +318,7 @@ export class SteamOpenIdService {
       //마지막에 단 한 번만 check_authentication 지정
       body.set('openid.mode', 'check_authentication');
 
-      const { data } = await axios.post(OP, body, {
+      const { data } = await axios.post<string>(OP, body, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         timeout: 7000,
       });

@@ -4,6 +4,7 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Observable, of, EMPTY } from 'rxjs';
 import { mergeMap } from 'rxjs/operators';
 import { createHash } from 'crypto';
@@ -11,15 +12,19 @@ import { createHash } from 'crypto';
 @Injectable()
 export class EtagInterceptor<T> implements NestInterceptor<T, T> {
   intercept(context: ExecutionContext, next: CallHandler<T>): Observable<T> {
-    const req = context.switchToHttp().getRequest();
-    const res = context.switchToHttp().getResponse();
+    const req = context.switchToHttp().getRequest<Request>();
+    const res = context.switchToHttp().getResponse<Response>();
 
     // 인증 의존 응답임을 명시
     res.setHeader('Vary', 'Authorization');
     // 저장 대신 재검증
     res.setHeader('Cache-Control', 'private, no-cache');
 
-    const ifNoneMatch = req.headers['if-none-match'];
+    //if-none-match 안전 추출
+    const raw = req.headers['if-none-match'];
+
+    const ifNoneMatch =
+      typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : undefined;
 
     return next.handle().pipe(
       mergeMap((body: T) => {

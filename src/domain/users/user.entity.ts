@@ -15,10 +15,14 @@ import { Friend } from './user-friend.entity';
 export class User {
   @PrimaryGeneratedColumn() id!: number;
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 17 })
+  @Column({ type: 'varchar', length: 17, unique: true })
   steamId!: string;
-  @Column({ nullable: true }) personaName!: string | null;
-  @Column({ nullable: true }) avatar!: string | null;
+  @Column({ type: 'varchar', length: 255, nullable: true }) personaName!:
+    | string
+    | null;
+  @Column({ type: 'varchar', length: 512, nullable: true }) avatar!:
+    | string
+    | null;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })

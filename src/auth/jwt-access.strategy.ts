@@ -18,7 +18,7 @@ export class JwtAccessStrategy extends PassportStrategy(
     });
   }
 
-  async validate(payload: AccessPayload) {
+  validate(payload: AccessPayload) {
     if (
       !Number.isSafeInteger(payload.sub) ||
       (payload.typ && payload.typ !== 'access')
