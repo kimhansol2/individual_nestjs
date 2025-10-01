@@ -13,6 +13,7 @@ import { FriendsService } from './friends.service';
 import { UserId } from '../auth/user-id.decorator';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { GetFriendsDto } from './get-friends.dto';
+import { GetCommonGamesDto } from './get-common-games.dto';
 
 @Controller('api/v1/friends')
 export class FriendsController {
@@ -85,5 +86,24 @@ export class FriendsController {
   ) {
     const userIdNum = parseInt(userId, 10);
     return this.friendsService.getFriendStatus(userIdNum, friendId);
+  }
+  @Get(':friendId/common-games')
+  @UseGuards(ThrottlerGuard)
+  getCommonGames(
+    @UserId() userId: string,
+    @Param('friendId', ParseIntPipe) friendId: number,
+    @Query(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        transformOptions: {
+          enableImplicitConversion: true,
+        },
+      }),
+    )
+    query: GetCommonGamesDto,
+  ) {
+    const userIdNum = parseInt(userId, 10);
+    return this.friendsService.getCommonGames(userIdNum, friendId, query);
   }
 }

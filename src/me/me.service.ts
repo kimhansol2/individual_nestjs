@@ -1,4 +1,4 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { OwnedGameRepository } from 'src/domain/games/owned-game.repository';
 import { ListMyGamesDto } from './dto/list-my-games.dto';
 import { UsersRepository } from 'src/domain/users/users.repository';

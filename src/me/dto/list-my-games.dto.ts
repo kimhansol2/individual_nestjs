@@ -9,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { lowerCase, emptyToUndef, trimString } from 'src/common/transformers';
 
 export class ListMyGamesDto {
   @IsOptional()
@@ -16,17 +17,17 @@ export class ListMyGamesDto {
   sort?: 'playtimeForever' | 'playtime2Weeks' | 'gameId' | 'name';
 
   @IsOptional()
-  @Transform(({ value }) => value?.toLowerCase())
+  @Transform(lowerCase, { toClassOnly: true })
   @IsIn(['asc', 'desc'])
   order: 'asc' | 'desc' = 'desc';
 
-  @Transform(({ value }) => (value === '' ? undefined : value))
+  @Transform(emptyToUndef, { toClassOnly: true })
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page = 1;
 
-  @Transform(({ value }) => (value === '' ? undefined : value))
+  @Transform(emptyToUndef, { toClassOnly: true })
   @Type(() => Number)
   @IsInt()
   @IsPositive()
@@ -34,7 +35,7 @@ export class ListMyGamesDto {
   size = 30;
 
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimString, { toClassOnly: true })
   @IsString()
   @MaxLength(100)
   keyword?: string;

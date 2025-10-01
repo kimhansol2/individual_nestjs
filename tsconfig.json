@@ -20,7 +20,7 @@
     "types": ["node", "express", "jest"],
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "useUnknownInCatchVariables": true,
@@ -28,6 +28,5 @@
       "src/*": ["src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/@types/**/*.d.ts",  "src/myfriends/**/*.ts"],
-  "exclude": ["**/*.spec.ts", "test/**"]
+  "include": ["src", "test"]
 }

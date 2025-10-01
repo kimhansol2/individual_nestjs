@@ -10,6 +10,10 @@ import type { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Friend } from '../domain/friends/friends.entity';
 import { GetFriendsDto } from './get-friends.dto';
+import { GetCommonGamesDto } from './get-common-games.dto'; // 이 DTO도 임포트
+import { PaginatedResponse } from 'src/common/types/pagination.types';
+import { Game } from 'src/domain/games/game.entity';
+import { UserGame } from 'src/domain/games/user-game.entity';
 
 export interface FriendWithExtra extends Friend {
   mutualFriendsCount?: number;
@@ -48,6 +52,8 @@ export class FriendsService {
   constructor(
     @InjectRepository(Friend)
     private readonly friendRepository: Repository<Friend>,
+    @InjectRepository(UserGame)
+    private readonly userGameRepository: Repository<UserGame>,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
   ) {}
@@ -290,5 +296,109 @@ export class FriendsService {
     });
 
     return friend ? friend.status : 'none';
+  }
+  async getCommonGames(
+    userId: number,
+    friendId: number,
+    query: GetCommonGamesDto,
+  ): Promise<PaginatedResponse<Game>> {
+    try {
+      const cacheKey = this.generateCacheKey(
+        userId,
+        { ...query, friendId: friendId },
+        'common:games',
+      );
+
+      // 1. 캐시 확인: Promise를 반환하므로 await 사용
+      const cached = await this.cacheManager.get(cacheKey);
+      if (cached) {
+        return cached as PaginatedResponse<Game>;
+      }
+
+      // 1. userId가 가진 게임 목록 조회 쿼리 빌더
+      const userGamesQuery = this.userGameRepository
+        .createQueryBuilder('userGame')
+        .select('userGame.gameId')
+        .where('userGame.userId = :userId', { userId });
+
+      // 2. friendId가 가진 게임 목록 조회 쿼리 빌더
+      const friendGamesQuery = this.userGameRepository
+        .createQueryBuilder('userGame')
+        .select('userGame.gameId')
+        .where('userGame.userId = :friendId', { friendId });
+
+      // 3. 두 쿼리의 교집합을 찾아 공통 게임 ID 목록을 얻는 서브쿼리 빌더
+      const commonGameIdsQb = this.userGameRepository
+        .createQueryBuilder('ug')
+        .select('ug.gameId')
+        .innerJoin(
+          `(${userGamesQuery.getQuery()})`,
+          'user_games',
+          'ug.gameId = user_games.gameId',
+        )
+        .innerJoin(
+          `(${friendGamesQuery.getQuery()})`,
+          'friend_games',
+          'ug.gameId = friend_games.gameId',
+        )
+        .where(
+          `ug.gameId IN (${userGamesQuery.getQuery()})`,
+          userGamesQuery.getParameters() as Record<string, unknown>,
+        )
+        .andWhere(
+          `ug.gameId IN (${friendGamesQuery.getQuery()})`,
+          friendGamesQuery.getParameters() as Record<string, unknown>,
+        );
+
+      // 4. 공통 게임 정보와 전체 개수를 조회하는 메인 쿼리 빌더
+      const gameRepository =
+        this.userGameRepository.manager.getRepository(Game);
+      const qb = gameRepository
+        .createQueryBuilder('game')
+        .where(`game.id IN (${commonGameIdsQb.getQuery()})`)
+        .setParameters(commonGameIdsQb.getParameters());
+
+      // 5. 총 개수 조회: Promise를 반환하므로 await 사용
+      const total = await qb.getCount();
+
+      // 페이지네이션 및 정렬 로직 (동기적)
+      const skip = (query.page - 1) * query.limit;
+      qb.skip(skip).take(query.limit);
+
+      if (query.sortBy && query.sortOrder) {
+        qb.orderBy(
+          `game.${query.sortBy}`,
+          query.sortOrder.toUpperCase() === 'DESC' ? 'DESC' : 'ASC',
+        );
+      } else {
+        qb.orderBy('game.name', 'ASC');
+      }
+
+      // 6. 실제 공통 게임 데이터 조회: Promise를 반환하므로 await 사용
+      const commonGames = await qb.getMany();
+
+      const response: PaginatedResponse<Game> = {
+        data: commonGames,
+        meta: {
+          page: query.page,
+          limit: query.limit,
+          total,
+          totalPages: Math.ceil(total / query.limit),
+          hasNext: skip + query.limit < total,
+          hasPrev: query.page > 1,
+        },
+      };
+
+      // 7. 캐시 저장: Promise를 반환하므로 await 사용
+      await this.cacheManager.set(cacheKey, response, this.CACHE_TTL);
+      return response;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        '공통 게임 목록 조회 중 오류가 발생했습니다.',
+      );
+    }
   }
 }
