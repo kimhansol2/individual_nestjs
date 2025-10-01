@@ -9,6 +9,7 @@ import { redisStore } from 'cache-manager-redis-yet';
 import { AppController } from './app.controller';
 import { HealthController } from './infra/redis/redis-health.controller';
 import { DashboardController } from './dashboard/dashboard.controller';
+import { UserAchievementController } from './user_achievement/user_achievement.controller';
 
 // Module 임포트
 import { SteamModule } from './integrations/steam/steam.module';
@@ -23,6 +24,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 // Service 임포트
 import { AppService } from './app.service';
 import { DashboardService } from './dashboard/dashboard.service';
+import { userAchievementService } from './user_achievement/user_achievement.service';
 
 // Entity 임포트
 import { OwnedGame } from './domain/games/owned-game.entity';
@@ -67,7 +69,6 @@ import { Friend } from './domain/friend/friend.entity';
         entities: [OwnedGame, Game, User, Achievement, UserAchievement, Friend],
       }),
     }),
-    
     // TypeOrmModule.forFeature 추가
     TypeOrmModule.forFeature([User, OwnedGame, Game, Friend]),
 
@@ -90,7 +91,12 @@ import { Friend } from './domain/friend/friend.entity';
     RedisModule,
     DashboardModule,
   ],
-  controllers: [AppController, HealthController, DashboardController],
-  providers: [AppService, DashboardService],
+  controllers: [
+    AppController,
+    HealthController,
+    DashboardController,
+    UserAchievementController,
+  ],
+  providers: [AppService, DashboardService, userAchievementService],
 })
 export class AppModule {}
