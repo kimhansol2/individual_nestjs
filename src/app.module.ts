@@ -17,7 +17,8 @@ import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
 import { RedisModule } from './infra/redis/redis.module';
 import { HealthController } from './infra/redis/redis-health.controller';
-import { SteamAuthController } from './auth/auth.controller';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { SteamAuthController } from './auth/auth.controller';
         JWT_ACCESS_SECRET: Joi.string().min(32).required(),
         JWT_EXPIRES_IN: Joi.string().default('15m'),
         JWT_REFRESH_SECRET: Joi.string().min(32).required(),
-        JWT_REFERSH_EXPIRES_IN: Joi.string().default('3d'),
+        JWT_REFRESH_EXPIRES_IN: Joi.string().default('3d'),
         REDIS_URL: Joi.string().required(),
       }),
     }),
@@ -55,6 +56,17 @@ import { SteamAuthController } from './auth/auth.controller';
         entities: [OwnedGame, Game, User, Achievement, UserAchievement],
       }),
     }),
+
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: async () => ({
+        store: await redisStore({
+          url: process.env.REDIS_URL,
+        }),
+        ttl: 30,
+        max: 0,
+      }),
+    }),
     SteamModule,
     AuthModule,
     MeModule,
@@ -63,7 +75,7 @@ import { SteamAuthController } from './auth/auth.controller';
     GameDomainModule,
     RedisModule,
   ],
-  controllers: [AppController, HealthController, SteamAuthController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}
