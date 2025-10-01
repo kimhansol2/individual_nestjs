@@ -1,11 +1,11 @@
 // summaryDTO
 
-import { oGameDto } from './oGame.dto';
+import { ownedGameDto } from './ownedGame.dto';
 
-export class SumDto {
+export class SummaryDto {
   total_games!: number;
   total_playtime_minutes!: number;
   recent_playtime_2weeks_minutes!: number;
-  most_played_game!: oGameDto;
+  most_played_game!: ownedGameDto;
   last_played_at!: Date;
 }

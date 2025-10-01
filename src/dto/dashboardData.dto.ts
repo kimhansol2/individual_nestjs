@@ -1,17 +1,17 @@
 // dashboardDataDTO
 
-import { SumDto } from './sum.dto';
-import { oGameDto } from './oGame.dto';
+import { SummaryDto } from './summary.dto';
+import { ownedGameDto } from './ownedGame.dto';
 import { FriendDto } from './friends.dto';
 
-export class DashbrdDataDto {
+export class DashboardDataDto {
   profile!: {
     steamid: string;
     personaName: string;
     avatar?: string;
   };
-  summary!: SumDto;
-  recently_played!: oGameDto[];
+  summary!: SummaryDto;
+  recently_played!: ownedGameDto[];
   achievement_progress!: {
     earned: number;
     total: number;

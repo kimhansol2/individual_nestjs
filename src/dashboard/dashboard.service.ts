@@ -28,7 +28,9 @@ export class DashboardService {
     private readonly gameRepository: Repository<Game>,
     @InjectRepository(Friend)
     private readonly friendRepository: Repository<Friend>,
-  ) {}
+  ) {
+    /* 공백 오류 */
+  }
 
   async getSteamDashboard(userId: number): Promise<DashboardResponseDto> {
     try {

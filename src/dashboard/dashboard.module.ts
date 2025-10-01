@@ -1,4 +1,4 @@
-// 대시보드 모듈
+// dashboardModule
 
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -10,10 +10,10 @@ import { Game } from '../domain/games/game.entity';
 import { Friend } from '../domain/friend/friend.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([User, OwnedGame, Game, Friend]),
-  ],
+  imports: [TypeOrmModule.forFeature([User, OwnedGame, Game, Friend])],
   controllers: [DashboardController],
   providers: [DashboardService],
 })
-export class DashboardModule {}
+export class DashboardModule {
+  /* 공백오류 */
+}

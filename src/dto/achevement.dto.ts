@@ -1,10 +1,8 @@
 // achievementDTO
 
 import { GameDto } from './game.dto';
-
 type GameIdMapped = { gameId: GameDto['gameId'] };
-
-export class AchDto implements GameIdMapped {
+export class AchievementDto implements GameIdMapped {
   id!: number;
   gameId!: number;
   apiName!: string;

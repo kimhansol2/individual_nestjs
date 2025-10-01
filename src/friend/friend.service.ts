@@ -1,17 +1,21 @@
+// friendService
+
 import { Injectable } from '@nestjs/common';
 import { FriendsRepository } from '../domain/friend/friend.repository';
 import { FriendDto } from '../dto/friends.dto';
 
 @Injectable()
 export class FriendsService {
-  constructor(private readonly friendsRepository: FriendsRepository) {}
+  constructor(private readonly friendsRepository: FriendsRepository) {
+    /* 공백오류 */
+  }
 
   async getFriendsByUserId(userId: number): Promise<FriendDto[]> {
     const friends = await this.friendsRepository.find({
       where: { userId },
     });
 
-    return friends.map(f => ({
+    return friends.map((f) => ({
       id: f.id,
       userId: f.userId,
       friendId: f.friendId,

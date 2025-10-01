@@ -4,6 +4,7 @@ import * as Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
+import { CacheAsideModule } from './common/cache/cache-aside.module';
 
 // Controller 임포트
 import { AppController } from './app.controller';
@@ -89,6 +90,7 @@ import { Friend } from './domain/friend/friend.entity';
     AchievementsModule,
     GameDomainModule,
     RedisModule,
+    CacheAsideModule,
     DashboardModule,
   ],
   controllers: [
@@ -99,4 +101,6 @@ import { Friend } from './domain/friend/friend.entity';
   ],
   providers: [AppService, DashboardService, userAchievementService],
 })
-export class AppModule {}
+export class AppModule {
+  /* 공백오류 */
+}
