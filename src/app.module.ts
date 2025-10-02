@@ -20,6 +20,7 @@ import { HealthController } from './infra/redis/redis-health.controller';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { CacheAsideModule } from './common/cache/cache-aside.module';
+import { FriendsModule } from './domain/friends/friends.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { CacheAsideModule } from './common/cache/cache-aside.module';
     GameDomainModule,
     RedisModule,
     CacheAsideModule,
+    FriendsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

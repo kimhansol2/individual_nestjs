@@ -1,4 +1,3 @@
-// get-common-games.dto.ts
 import { IsOptional, IsEnum, IsInt, Min, Max, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -23,6 +22,12 @@ export class GetCommonGamesDto {
   @Min(1)
   @Max(100)
   limit: number = 20;
+
+  @IsInt()
+  friendId!: number;
+
+  @IsOptional()
+  ascending?: boolean = true; // 기본 정렬 방향 ASC
 }
 
 // common-games-response.dto.ts
