@@ -1,15 +1,14 @@
 // userAchievementDTO
 
 import { UserDto } from './user.dto';
-import { AchievementDto } from './achevement.dto';
+import { AchievementDto } from './achievement.dto';
 
 type UserIdMapped = { userId: UserDto['id'] };
 type AchievementGameIdMapped = { gameId: AchievementDto['gameId'] };
 type AchievementApiNameMapped = { apiName: AchievementDto['apiName'] };
 
 export class userAchievementDto
-  implements AchievementApiNameMapped, AchievementGameIdMapped, UserIdMapped
-{
+  implements AchievementApiNameMapped, AchievementGameIdMapped, UserIdMapped {
   id!: number;
   userId!: number;
   gameId!: number;
