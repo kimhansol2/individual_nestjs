@@ -15,11 +15,13 @@ import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
-import { RedisModule } from './infra/redis/redis.module';
 import { HealthController } from './infra/redis/redis-health.controller';
 import { CacheModule } from '@nestjs/cache-manager';
-import { redisStore } from 'cache-manager-ioredis-yet';
+import type Redis from 'ioredis';
+import { RedisModule } from './infra/redis/redis.module';
 import { CacheAsideModule } from './common/cache/cache-aside.module';
+import { redisStore } from 'cache-manager-ioredis-yet';
+import { REDIS } from './infra/redis/redis.constants';
 
 @Module({
   imports: [
@@ -59,12 +61,12 @@ import { CacheAsideModule } from './common/cache/cache-aside.module';
     }),
     CacheModule.registerAsync({
       isGlobal: true,
-      inject: [ConfigService],
-      useFactory: async (cfg: ConfigService) => ({
-        ttl: 0,
+      imports: [ConfigModule, RedisModule],
+      inject: [ConfigService, REDIS],
+      useFactory: async (_cfg: ConfigService, client: Redis) => ({
         store: await redisStore({
-          url: cfg.getOrThrow<string>('REDIS_URL'),
-          keyPrefix: 'app:',
+          client,
+          ttl: 600,
         }),
       }),
     }),

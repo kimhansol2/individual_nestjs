@@ -1,7 +1,8 @@
 import { Inject, Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import Redis from 'ioredis';
+import type Redis from 'ioredis';
+import { REDIS } from '../infra/redis/redis.constants';
 import { randomBytes, createHash } from 'crypto';
 import { errorSummary } from 'src/common/error.util';
 import { JwtService } from '@nestjs/jwt';
@@ -51,7 +52,7 @@ export class SteamOpenIdService {
 
   constructor(
     private readonly cfg: ConfigService,
-    @Inject('REDIS') private readonly redis: Redis,
+    @Inject(REDIS) private readonly redis: Redis,
     private readonly jwt: JwtService,
     private readonly usersRepo: UsersRepository,
     private readonly ownedRepo: OwnedGameRepository,
