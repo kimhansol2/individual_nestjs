@@ -40,4 +40,8 @@ jobs:
         run: npm test
 
       - name: Test Coverage
+<<<<<<< HEAD
         run: npm run test:cov
+=======
+        run: npm run test:cov
+>>>>>>> 1e91b59061a38442c2fd80c9cfa7c3f805d5173f
