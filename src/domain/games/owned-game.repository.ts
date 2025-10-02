@@ -3,12 +3,72 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { OwnedGame } from './owned-game.entity';
 import { Game } from './game.entity';
+import axios from 'axios';
+import { User } from '../users/user.entity';
 
+type SteamOwnedGamesResp = {
+  response?: {
+    game_count?: number;
+    games?: Array<{
+      appid: number;
+      playtime_forever?: number;
+      playtime_2weeks?: number;
+      rtime_last_played?: number;
+    }>;
+  };
+};
 @Injectable()
 export class OwnedGameRepository {
   constructor(
     @InjectRepository(OwnedGame) private readonly repo: Repository<OwnedGame>,
   ) {}
+
+  async fetchOwnedGamesAsRows(
+    steamKey: string,
+    user: Pick<User, 'id' | 'steamId'>,
+  ): Promise<Array<Partial<OwnedGame>>> {
+    const { data } = await axios.get<SteamOwnedGamesResp>(
+      'https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/',
+      {
+        params: {
+          key: steamKey,
+          steamid: user.steamId,
+          include_appinfo: 0,
+          include_played_free_games: 1,
+        },
+        timeout: 7000,
+      },
+    );
+
+    const games = data?.response?.games ?? [];
+    const now = Date.now();
+    const THIRIY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+    return games.map((g) => {
+      const lastPlayedAt =
+        typeof g.rtime_last_played === 'number' && g.rtime_last_played > 0
+          ? new Date(g.rtime_last_played * 1000)
+          : null;
+
+      // 최근 2주 플레이 > 0 이거나 30일 이내 플레이면 installed = true
+      const installed =
+        (typeof g.playtime_2weeks === 'number' && g.playtime_2weeks > 0) ||
+        (lastPlayedAt ? now - lastPlayedAt.getTime() <= THIRIY_DAYS : false);
+
+      const row: Partial<OwnedGame> = {
+        userId: user.id,
+        gameId: g.appid,
+        playtimeForever:
+          typeof g.playtime_forever === 'number' ? g.playtime_forever : 0,
+        playtime2Weeks:
+          typeof g.playtime_2weeks === 'number' ? g.playtime_2weeks : 0,
+        lastPlayedAt,
+        installed,
+        hidden: false,
+      };
+      return row;
+    });
+  }
 
   //복합키(userId, gameId) 기준 upsert
   async upsertMany(rows: Array<Partial<OwnedGame>>): Promise<void> {

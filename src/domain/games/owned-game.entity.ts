@@ -26,12 +26,22 @@ export class OwnedGame {
   createdAt!: Date;
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updatedAt!: Date;
-  @Column({ type: 'timestamptz', nullable: true, name: 'last_played_at' })
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+    name: 'last_played_at',
+    update: false,
+  })
   lastPlayedAt!: Date | null;
   @Column({ default: false }) installed!: boolean;
   @Column({ default: false }) hidden!: boolean;
 
-  @Column({ type: 'timestamptz', nullable: true, name: 'added_at' })
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+    name: 'added_at',
+    default: () => 'NOW()',
+  })
   addedAt!: Date | null;
 
   @ManyToOne(() => User, (user) => user.ownedGames, { onDelete: 'CASCADE' })

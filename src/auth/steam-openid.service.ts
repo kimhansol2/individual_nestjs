@@ -8,6 +8,9 @@ import { JwtService } from '@nestjs/jwt';
 import { UsersRepository } from 'src/domain/users/users.repository';
 import { User } from 'src/domain/users/user.entity';
 import { UnauthorizedException } from '@nestjs/common';
+import { CacheAsideService } from 'src/common/cache/cache-aside.service';
+import { myGamesCountIdx, myGamesIdx, profileIdx } from 'src/common/cache/keys';
+import { OwnedGameRepository } from 'src/domain/games/owned-game.repository';
 
 const OP = 'https://steamcommunity.com/openid/login';
 
@@ -51,6 +54,8 @@ export class SteamOpenIdService {
     @Inject('REDIS') private readonly redis: Redis,
     private readonly jwt: JwtService,
     private readonly usersRepo: UsersRepository,
+    private readonly ownedRepo: OwnedGameRepository,
+    private readonly cache: CacheAsideService,
   ) {
     this.realm = this.cfg.getOrThrow<string>('STEAM_REALM');
     this.returnTo = this.cfg.getOrThrow<string>('STEAM_RETURN_TO');
@@ -142,6 +147,23 @@ export class SteamOpenIdService {
 
     // 유저 upsert (프로필 함께 패치)
     const user = await this.ensureUser(steamid64, { personaName, avatar });
+
+    await this.cache.invalidateByIndex(profileIdx(user.id));
+
+    if (steamKey) {
+      try {
+        const rows = await this.ownedRepo.fetchOwnedGamesAsRows(steamKey, user);
+        if (rows.length) {
+          await this.ownedRepo.upsertMany(rows);
+          await Promise.allSettled([
+            this.cache.invalidateByIndex(myGamesIdx(user.id)),
+            this.cache.invalidateByIndex(myGamesCountIdx(user.id)),
+          ]);
+        }
+      } catch {
+        /*..*/
+      }
+    }
 
     // 토큰 발급
     const { token: accessToken } = await this.signAccessToken(user.id);

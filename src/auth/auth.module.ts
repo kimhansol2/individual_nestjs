@@ -5,9 +5,10 @@ import { RedisModule } from 'src/infra/redis/redis.module';
 import { SteamAuthController } from './auth.controller';
 import { SteamOpenIdService } from './steam-openid.service';
 import { JwtAccessStrategy } from './jwt-access.strategy';
+import { MeModule } from 'src/me/me.module';
 
 @Module({
-  imports: [UsersModule, RedisModule, JwtModule.register({})],
+  imports: [UsersModule, RedisModule, JwtModule.register({}), MeModule],
   controllers: [SteamAuthController],
   providers: [SteamOpenIdService, JwtAccessStrategy],
   exports: [SteamOpenIdService],
