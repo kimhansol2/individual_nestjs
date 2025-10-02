@@ -62,9 +62,13 @@ export class SteamOpenIdService {
     this.returnTo = this.cfg.getOrThrow<string>('STEAM_RETURN_TO');
     this.accessSecret = this.cfg.getOrThrow<string>('JWT_ACCESS_SECRET');
     this.refreshSecret = this.cfg.getOrThrow<string>('JWT_REFRESH_SECRET');
-    this.accessTtlSec = Number(this.cfg.get('JWT_EXPIRES_IN', '900'));
-    this.refreshTtlSec = Number(
-      this.cfg.get('JWT_REFRESH_EXPIRES_IN', '259200'),
+    this.accessTtlSec = parseInt(
+      this.cfg.get<string>('JWT_EXPIRES_IN', '900') ?? '900',
+      10,
+    );
+    this.refreshTtlSec = parseInt(
+      this.cfg.get<string>('JWT_REFRESH_EXPIRES_IN', '259200') ?? '259200',
+      10,
     );
   }
 

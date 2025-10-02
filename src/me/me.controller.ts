@@ -15,7 +15,6 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { MeService } from './me.service';
 import { Envelope, MeProfileDto } from './dto/me-profile.dto';
 import { ListMyGamesDto } from './dto/list-my-games.dto';
@@ -29,7 +28,7 @@ function parseBool(s?: string) {
 
 @ApiTags('me')
 @ApiBearerAuth()
-@UseGuards(ThrottlerGuard, JwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 @Controller('me')
 export class MeController {
   constructor(private readonly meService: MeService) {}
