@@ -12,7 +12,7 @@ import { Friend } from '../domain/friends/friends.entity';
 import { GetFriendsDto } from './get-friends.dto';
 import { GetCommonGamesDto } from './get-common-games.dto'; // 이 DTO도 임포트
 import { PaginatedResponse } from 'src/common/types/pagination.types';
-import { Game } from 'src/domain/games/game.entity';
+import { Game } from '../domain/games/game.entity';
 import { OwnedGame } from '../domain/games/owned-game.entity';
 
 export interface FriendWithExtra extends Friend {
