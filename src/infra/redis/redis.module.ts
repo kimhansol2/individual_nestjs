@@ -32,4 +32,6 @@ import { REDIS } from './redis.constants';
   ],
   exports: [REDIS, RedisHealthService],
 })
-export class RedisModule {}
+export class RedisModule {
+  /* 공백오류 */
+}
