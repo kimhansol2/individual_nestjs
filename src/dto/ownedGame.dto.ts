@@ -9,8 +9,7 @@ type GameTitleMapped = { title: GameDto['title'] };
 type GameIconMapped = { icon: GameDto['icon'] };
 
 export class ownedGameDto
-  implements UserIdMapped, GameIdMapped, GameTitleMapped, GameIconMapped
-{
+  implements UserIdMapped, GameIdMapped, GameTitleMapped, GameIconMapped /* 공백오류 */ {
   id!: number;
   userId!: number;
   gameId!: number;

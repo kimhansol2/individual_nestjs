@@ -21,6 +21,7 @@ import { GameDomainModule } from './domain/games/game.module';
 import { AchievementsModule } from './domain/achievements/achievements.module';
 import { RedisModule } from './infra/redis/redis.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { AchievementModule } from './achievement/achievement.module';
 
 // Service 임포트
 import { AppService } from './app.service';
@@ -92,6 +93,7 @@ import { Friend } from './domain/friend/friend.entity';
     RedisModule,
     CacheAsideModule,
     DashboardModule,
+    AchievementModule,
   ],
   controllers: [
     AppController,
