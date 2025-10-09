@@ -93,7 +93,6 @@ export class FriendsController {
     const userIdNum = parseInt(userId, 10);
     return this.friendsService.getFriendStatus(userIdNum, friendId);
   }
-
   @Get(':friendId/common-games')
   @UseGuards(ThrottlerGuard)
   getCommonGames(

@@ -156,7 +156,34 @@ export class FriendsService {
       dto.sortBy || 'createdAt',
     ].join(':');
 
-    return `friends:list:${params}`;
+    // 공통 속성 추가
+    if (dto.page !== undefined && dto.page !== null) {
+      params.push(dto.page);
+    }
+    if (dto.limit !== undefined && dto.limit !== null) {
+      params.push(dto.limit);
+    }
+
+    // GetFriendsDto 속성 처리
+    if ('search' in dto && typeof dto.search !== 'undefined') {
+      params.push(dto.search || '');
+    }
+    if ('sortBy' in dto && typeof dto.sortBy !== 'undefined') {
+      params.push(dto.sortBy || 'createdAt');
+    }
+
+    // friendId 처리 (getCommonGames에서 사용)
+    function isCommonGamesDto(
+      dto: GetFriendsDto | GetCommonGamesDto,
+    ): dto is GetCommonGamesDto {
+      return 'friendId' in dto;
+    }
+
+    if (isCommonGamesDto(dto) && dto.friendId != null) {
+      params.push(dto.friendId);
+    }
+
+    return `${keyType}:${params.join(':')}`;
   }
 
   async invalidateFriendsCacheForUser(userId: number): Promise<void> {
