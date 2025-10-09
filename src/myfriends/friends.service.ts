@@ -148,42 +148,15 @@ export class FriendsService {
   }
 
   private generateFriendsCacheKey(userId: number, dto: GetFriendsDto): string {
-    const params = [
+    const params: (string | number)[] = [
       userId,
       dto.page,
       dto.limit,
       dto.search || '',
       dto.sortBy || 'createdAt',
-    ].join(':');
+    ];
 
-    // 공통 속성 추가
-    if (dto.page !== undefined && dto.page !== null) {
-      params.push(dto.page);
-    }
-    if (dto.limit !== undefined && dto.limit !== null) {
-      params.push(dto.limit);
-    }
-
-    // GetFriendsDto 속성 처리
-    if ('search' in dto && typeof dto.search !== 'undefined') {
-      params.push(dto.search || '');
-    }
-    if ('sortBy' in dto && typeof dto.sortBy !== 'undefined') {
-      params.push(dto.sortBy || 'createdAt');
-    }
-
-    // friendId 처리 (getCommonGames에서 사용)
-    function isCommonGamesDto(
-      dto: GetFriendsDto | GetCommonGamesDto,
-    ): dto is GetCommonGamesDto {
-      return 'friendId' in dto;
-    }
-
-    if (isCommonGamesDto(dto) && dto.friendId != null) {
-      params.push(dto.friendId);
-    }
-
-    return `${keyType}:${params.join(':')}`;
+    return `friends:list:${params.join(':')}`;
   }
 
   async invalidateFriendsCacheForUser(userId: number): Promise<void> {
@@ -526,16 +499,16 @@ export class FriendsService {
   ): string {
     const [id1, id2] = [userId, friendId].sort((a, b) => a - b);
 
-    const params = [
+    const params: (string | number)[] = [
       id1,
       id2,
       dto.page,
       dto.limit,
       dto.search || '',
       dto.sortBy || 'playtime',
-    ].join(':');
+    ];
 
-    return `friends:common-games:${params}`;
+    return `friends:common-games:${params.join(':')}`;
   }
 
   async invalidateCommonGamesCache(
