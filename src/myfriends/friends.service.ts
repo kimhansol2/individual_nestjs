@@ -337,10 +337,12 @@ export class FriendsService {
 
       // 6. 검색 필터 적용
       let filteredGames = commonGames;
-      if (dto.search) {
+      if (dto.search && typeof dto.search === 'string') {
         const searchLower = dto.search.toLowerCase();
         filteredGames = commonGames.filter((game) =>
-          game.name.toLowerCase().includes(searchLower),
+          typeof game.name === 'string'
+            ? game.name.toLowerCase().includes(searchLower)
+            : false,
         );
       }
 

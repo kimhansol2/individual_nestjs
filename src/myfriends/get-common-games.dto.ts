@@ -1,4 +1,14 @@
-import { IsOptional, IsEnum, IsInt, Min, Max, IsString } from 'class-validator';
+// src/friends/get-common-games.dto.ts 파일
+
+import {
+  IsOptional,
+  IsEnum,
+  IsInt,
+  Min,
+  Max,
+  IsString,
+  IsBoolean,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class GetCommonGamesDto {
@@ -23,14 +33,13 @@ export class GetCommonGamesDto {
   @Max(100)
   limit: number = 20;
 
-  @IsInt()
-  friendId!: number;
-
   @IsOptional()
-  ascending?: boolean = true; // 기본 정렬 방향 ASC
+  @Type(() => Boolean)
+  @IsBoolean()
+  ascending?: boolean = true;
 }
 
-// common-games-response.dto.ts
+// 🚨 'export' 키워드 추가
 export interface CommonGame {
   appid: number;
   name: string;
@@ -42,6 +51,7 @@ export interface CommonGame {
   rtime_last_played_friend?: number;
 }
 
+// 🚨 'export' 키워드 추가
 export interface CommonGamesResponse {
   data: CommonGame[];
   meta: {

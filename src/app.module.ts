@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SteamModule } from './integrations/steam/steam.module';
@@ -21,6 +22,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { CacheAsideModule } from './common/cache/cache-aside.module';
 import { FriendsModule } from './domain/friends/friends.module';
+import { AuthController } from './auth/auth.controller';
 
 @Module({
   imports: [
@@ -41,6 +43,12 @@ import { FriendsModule } from './domain/friends/friends.module';
         REDIS_URL: Joi.string().required(),
       }),
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 60초
+        limit: 10, // 60초당 10개 요청
+      },
+    ]),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({
         type: 'postgres',
@@ -79,7 +87,7 @@ import { FriendsModule } from './domain/friends/friends.module';
     CacheAsideModule,
     FriendsModule,
   ],
-  controllers: [AppController, HealthController],
+  controllers: [AppController, HealthController, AuthController],
   providers: [AppService],
 })
 export class AppModule {}
