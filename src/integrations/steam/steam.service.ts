@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
-import { errorSummary } from 'src/common/error.util';
+import { errorSummary } from '../../common/error.util';
 
 const API = 'https://api.steampowered.com';
 
