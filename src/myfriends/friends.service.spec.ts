@@ -2,12 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { FriendsService } from './friends.service';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Friend } from '../domain/friends/friends.entity';
-import { OwnedGame } from '../domain/games/owned-game.entity'; // OwnedGame 엔티티 임포트 추가
+import { User } from '../domain/users/user.entity';
+import { OwnedGame } from '../domain/games/owned-game.entity';
 import { GetFriendsDto } from './get-friends.dto';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { SteamService } from '../integrations/steam/steam.service';
 
-// 실제 서비스에서 사용하는 RedisCache 인터페이스와 유사하게 정의
 interface MockRedisCache {
   keys: jest.Mock;
   del: jest.Mock;
@@ -16,16 +17,17 @@ interface MockRedisCache {
 describe('FriendsService', () => {
   let service: FriendsService;
   let friendRepository: jest.Mocked<Partial<Repository<Friend>>>;
-  let ownedGameRepository: jest.Mocked<Partial<Repository<OwnedGame>>>; // OwnedGameRepository 선언 추가
+  let userRepository: jest.Mocked<Partial<Repository<User>>>;
+  let ownedGameRepository: jest.Mocked<Partial<Repository<OwnedGame>>>;
   let cacheManager: {
     get: jest.Mock;
     set: jest.Mock;
     del: jest.Mock;
     stores: MockRedisCache;
   };
+  let steamService: jest.Mocked<Partial<SteamService>>;
 
   beforeEach(async () => {
-    // 쿼리 빌더를 위한 모의 객체 생성 (FriendRepository용)
     const mockFriendQueryBuilder = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -36,7 +38,6 @@ describe('FriendsService', () => {
       getCount: jest.fn().mockResolvedValue(0),
     } as unknown as SelectQueryBuilder<Friend>;
 
-    // Friend Repository 모킹
     friendRepository = {
       findOne: jest.fn(),
       find: jest.fn(),
@@ -46,18 +47,29 @@ describe('FriendsService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(mockFriendQueryBuilder),
     } as jest.Mocked<Partial<Repository<Friend>>>;
 
-    // OwnedGame Repository 모킹 추가
+    userRepository = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      create: jest.fn(),
+      save: jest.fn(),
+    } as jest.Mocked<Partial<Repository<User>>>;
+
     ownedGameRepository = {
-      // FriendsService가 OwnedGameRepository에서 필요로 하는 메서드들을 여기에 모킹합니다.
-      // 예: find, findOne, save, create 등
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
-      // 여기에 FriendsService에서 사용될 OwnedGameRepository의 다른 메서드를 추가하세요
-      // 예: save: jest.fn(),
-      // 예: create: jest.fn((entity) => entity),
     } as jest.Mocked<Partial<Repository<OwnedGame>>>;
 
-    // 캐시 매니저 모킹
+    steamService = {
+      getOwnedGames: jest.fn().mockResolvedValue({
+        game_count: 0,
+        games: [],
+      }),
+      buildAppHeaderUrl: jest.fn(
+        (appid: number) =>
+          `https://cdn.akamai.steamstatic.com/steam/apps/${appid}/header.jpg`,
+      ),
+    } as jest.Mocked<Partial<SteamService>>;
+
     cacheManager = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
@@ -76,12 +88,20 @@ describe('FriendsService', () => {
           useValue: friendRepository,
         },
         {
-          provide: getRepositoryToken(OwnedGame), // OwnedGameRepository 모킹 추가
+          provide: getRepositoryToken(User),
+          useValue: userRepository,
+        },
+        {
+          provide: getRepositoryToken(OwnedGame),
           useValue: ownedGameRepository,
         },
         {
           provide: CACHE_MANAGER,
           useValue: cacheManager,
+        },
+        {
+          provide: SteamService,
+          useValue: steamService,
         },
       ],
     }).compile();
@@ -94,12 +114,10 @@ describe('FriendsService', () => {
   });
 
   it('should return empty friend list', async () => {
-    // GetFriendsDto 객체 생성
     const dto = new GetFriendsDto();
     dto.page = 1;
     dto.limit = 10;
 
-    // friendRepository의 createQueryBuilder mock 설정 (예시)
     (friendRepository.createQueryBuilder as jest.Mock).mockReturnValue({
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
