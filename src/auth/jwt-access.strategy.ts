@@ -16,6 +16,11 @@ export class JwtAccessStrategy extends PassportStrategy(
       secretOrKey: cfg.getOrThrow<string>('JWT_ACCESS_SECRET'),
       ignoreExpiration: false,
     });
+    // JwtAccessStrategy에서 사용되는 JWT_ACCESS_SECRET 값을 출력하여 확인
+    console.log(
+      'JwtAccessStrategy에서 사용되는 JWT_ACCESS_SECRET:',
+      cfg.getOrThrow<string>('JWT_ACCESS_SECRET'),
+    );
   }
 
   validate(payload: AccessPayload) {

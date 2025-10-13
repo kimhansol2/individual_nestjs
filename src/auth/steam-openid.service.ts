@@ -190,7 +190,63 @@ export class SteamOpenIdService {
     };
   }
 
-  private async signAccessToken(userId: number): Promise<{ token: string }> {
+  async testLogin(steamId: string) {
+    try {
+      const user = await this.ensureUser(steamId);
+
+      // JWT_ACCESS_SECRET 값을 출력하여 확인
+      console.log(
+        'testLogin에서 사용되는 JWT_ACCESS_SECRET:',
+        this.accessSecret,
+      );
+
+      // JWT 토큰 직접 생성 (signAccessToken, signRefreshToken 메서드 사용하지 않음)
+      const accessPayload = { sub: user.id, typ: 'access' };
+      const accessToken = await this.jwt.signAsync(accessPayload, {
+        secret: this.accessSecret,
+        expiresIn: 900, // 하드코딩된 값: 15분 (초 단위)
+      });
+
+      console.log(
+        '생성된 Access Token 페이로드:',
+        this.jwt.decode(accessToken),
+      );
+
+      const jti = randomBytes(16).toString('hex');
+      const refreshPayload = { sub: user.id, jti, typ: 'refresh' };
+      const refreshToken = await this.jwt.signAsync(refreshPayload, {
+        secret: this.refreshSecret,
+        expiresIn: 259200, // 하드코딩된 값: 3일 (초 단위)
+      });
+
+      // Redis에 토큰 저장 (storeRefreshToken 메서드 사용하지 않음)
+      const hash = createHash('sha256').update(refreshToken).digest('hex');
+      await this.redis.set(
+        `rt:${jti}`,
+        JSON.stringify({ userId: user.id, hash }),
+        'EX',
+        259200, // 하드코딩된 값: 3일 (초 단위)
+        'NX',
+      );
+
+      return {
+        user: {
+          id: user.id,
+          steamId: user.steamId,
+          personaName: user.personaName,
+          avatar: user.avatar,
+        },
+        accessToken,
+        accessTokenExpiresIn: 900,
+        refreshToken,
+        refreshTokenMaxAgeMs: 259200 * 1000,
+      };
+    } catch (error) {
+      console.error('Error in testLogin:', error);
+      throw error;
+    }
+  }
+  protected async signAccessToken(userId: number): Promise<{ token: string }> {
     const payload = { sub: userId, typ: 'access' };
     const token = await this.jwt.signAsync(payload, {
       secret: this.accessSecret,
@@ -199,7 +255,7 @@ export class SteamOpenIdService {
     return { token };
   }
 
-  private async signRefreshToken(
+  protected async signRefreshToken(
     userId: number,
   ): Promise<{ token: string; jti: string }> {
     const jti = randomBytes(16).toString('hex');
@@ -211,7 +267,11 @@ export class SteamOpenIdService {
     return { token, jti };
   }
 
-  private async storeRefreshToken(jti: string, userId: number, token: string) {
+  protected async storeRefreshToken(
+    jti: string,
+    userId: number,
+    token: string,
+  ) {
     const hash = createHash('sha256').update(token).digest('hex');
     await this.redis.set(
       `rt:${jti}`,

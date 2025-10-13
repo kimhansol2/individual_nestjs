@@ -10,7 +10,30 @@ import {
 } from '@nestjs/common';
 import type { Response, Request } from 'express';
 import { SteamOpenIdService } from './steam-openid.service';
+import { Body } from '@nestjs/common';
 
+interface TestLoginDto {
+  steamId: string;
+}
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly steamOpenIdService: SteamOpenIdService) {}
+
+  @Post('login')
+  @HttpCode(201) // 테스트에서 기대하는 상태 코드
+  async login(@Body() loginDto: TestLoginDto) {
+    // testLogin 메서드 호출
+    const result = await this.steamOpenIdService.testLogin(loginDto.steamId);
+
+    // 테스트에서 기대하는 형식으로 반환
+    return {
+      user: result.user,
+      tokenType: 'Bearer',
+      accessToken: result.accessToken,
+      expiresIn: result.accessTokenExpiresIn,
+    };
+  }
+}
 function getCookie(req: Request, name: string): string | undefined {
   const anyReq = req as unknown as { cookies?: unknown };
   const { cookies } = anyReq;

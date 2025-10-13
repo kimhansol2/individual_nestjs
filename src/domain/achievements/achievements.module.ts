@@ -7,4 +7,6 @@ import { UserAchievement } from './user-achievement.entity';
   imports: [TypeOrmModule.forFeature([Achievement, UserAchievement])],
   exports: [TypeOrmModule],
 })
-export class AchievementsModule {}
+export class AchievementsModule {
+  /* 공백 오류 */
+}

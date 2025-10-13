@@ -2,6 +2,8 @@ import {
   Injectable,
   BadRequestException,
   InternalServerErrorException,
+  NotFoundException,
+  ForbiddenException,
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,11 +11,16 @@ import { Repository, SelectQueryBuilder } from 'typeorm';
 import type { Cache } from 'cache-manager';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Friend } from '../domain/friends/friends.entity';
-import { GetFriendsDto } from './get-friends.dto';
-import { GetCommonGamesDto } from './get-common-games.dto'; // 이 DTO도 임포트
-import { PaginatedResponse } from 'src/common/types/pagination.types';
-import { Game } from '../domain/games/game.entity';
+import { User } from '../domain/users/user.entity';
 import { OwnedGame } from '../domain/games/owned-game.entity';
+import { GetFriendsDto } from './get-friends.dto';
+import {
+  GetCommonGamesDto,
+  CommonGamesResponse,
+  CommonGame,
+} from './get-common-games.dto';
+import { PaginatedResponse } from '../common/types/pagination.types';
+import { SteamService } from '../integrations/steam/steam.service';
 
 export interface FriendWithExtra extends Friend {
   mutualFriendsCount?: number;
@@ -42,8 +49,11 @@ export class FriendsService {
     private readonly friendRepository: Repository<Friend>,
     @InjectRepository(OwnedGame)
     private readonly userGameRepository: Repository<OwnedGame>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
+    private readonly steamService: SteamService,
   ) {}
 
   async getFriends(
@@ -51,7 +61,7 @@ export class FriendsService {
     dto: GetFriendsDto,
   ): Promise<PaginatedResponse<FriendWithExtra>> {
     try {
-      const cacheKey = this.generateCacheKey('friends:list', userId, dto);
+      const cacheKey = this.generateFriendsCacheKey(userId, dto);
 
       // 캐시 확인
       const cached = await this.cacheManager.get(cacheKey);
@@ -108,13 +118,8 @@ export class FriendsService {
       .where('friend.userId = :userId', { userId })
       .andWhere('friend.status = :status', { status: 'accepted' });
 
-    // 검색어 필터링 (friendUser 조인 필요 - 실제 User 엔티티와 관계 설정 필요)
+    // 검색어 필터링
     if (dto.search) {
-      // User 엔티티가 있다면 조인 추가
-      // qb.leftJoin('friend.user', 'user')
-      //   .andWhere('user.username LIKE :search', { search: `%${dto.search}%` });
-
-      // 현재는 friendId로만 검색
       qb.andWhere('friend.friendId LIKE :search', {
         search: `%${dto.search}%`,
       });
@@ -132,8 +137,6 @@ export class FriendsService {
   ): void {
     switch (sortBy) {
       case 'name':
-        // User 엔티티 조인이 있다면
-        // qb.orderBy('user.username', 'ASC');
         qb.orderBy('friend.friendId', 'ASC');
         break;
 
@@ -144,41 +147,16 @@ export class FriendsService {
     }
   }
 
-  private generateCacheKey(
-    keyType: string,
-    userId: number,
-    dto: GetFriendsDto | GetCommonGamesDto,
-  ): string {
-    const params: (string | number)[] = [userId];
+  private generateFriendsCacheKey(userId: number, dto: GetFriendsDto): string {
+    const params: (string | number)[] = [
+      userId,
+      dto.page,
+      dto.limit,
+      dto.search || '',
+      dto.sortBy || 'createdAt',
+    ];
 
-    // 공통 속성 추가
-    if (dto.page !== undefined && dto.page !== null) {
-      params.push(dto.page);
-    }
-    if (dto.limit !== undefined && dto.limit !== null) {
-      params.push(dto.limit);
-    }
-
-    // GetFriendsDto 속성 처리
-    if ('search' in dto && typeof dto.search !== 'undefined') {
-      params.push(dto.search || '');
-    }
-    if ('sortBy' in dto && typeof dto.sortBy !== 'undefined') {
-      params.push(dto.sortBy || 'createdAt');
-    }
-
-    // friendId 처리 (getCommonGames에서 사용)
-    function isCommonGamesDto(
-      dto: GetFriendsDto | GetCommonGamesDto,
-    ): dto is GetCommonGamesDto {
-      return 'friendId' in dto;
-    }
-
-    if (isCommonGamesDto(dto) && dto.friendId != null) {
-      params.push(dto.friendId);
-    }
-
-    return `${keyType}:${params.join(':')}`;
+    return `friends:list:${params.join(':')}`;
   }
 
   async invalidateFriendsCacheForUser(userId: number): Promise<void> {
@@ -310,109 +288,247 @@ export class FriendsService {
 
     return friend ? friend.status : 'none';
   }
+
+  // ==================== 공통 게임 관련 메서드 ====================
+
   async getCommonGames(
     userId: number,
     friendId: number,
-    query: GetCommonGamesDto,
-  ): Promise<PaginatedResponse<Game>> {
+    dto: GetCommonGamesDto,
+  ): Promise<CommonGamesResponse> {
     try {
-      const cacheKey = this.generateCacheKey(
-        'common:games',
-        userId,
-        Object.assign({}, query, { friendId }), // Object.assign 메서드 사용
-      ); // 명시적으로 속성 이름과 값을 모두 작성
+      // 1. 친구 관계 검증
+      await this.validateFriendship(userId, friendId);
 
-      // 1. 캐시 확인: Promise를 반환하므로 await 사용
+      // 2. 캐시 확인
+      const cacheKey = this.generateCommonGamesCacheKey(userId, friendId, dto);
       const cached = await this.cacheManager.get(cacheKey);
       if (cached) {
-        return cached as PaginatedResponse<Game>;
+        return cached as CommonGamesResponse;
       }
 
-      // 1. userId가 가진 게임 목록 조회 쿼리 빌더
-      const userGamesQuery = this.userGameRepository
-        .createQueryBuilder('userGame')
-        .select('userGame.gameId')
-        .where('userGame.userId = :userId', { userId });
+      // 3. User 엔티티에서 steamId 조회
+      const [user, friend] = await Promise.all([
+        this.userRepository.findOne({
+          where: { id: userId },
+          select: ['id', 'steamId', 'personaName'],
+        }),
+        this.userRepository.findOne({
+          where: { id: friendId },
+          select: ['id', 'steamId', 'personaName'],
+        }),
+      ]);
 
-      // 2. friendId가 가진 게임 목록 조회 쿼리 빌더
-      const friendGamesQuery = this.userGameRepository
-        .createQueryBuilder('userGame')
-        .select('userGame.gameId')
-        .where('userGame.userId = :friendId', { friendId });
+      if (!user || !friend) {
+        throw new NotFoundException('사용자를 찾을 수 없습니다.');
+      }
 
-      // 3. 두 쿼리의 교집합을 찾아 공통 게임 ID 목록을 얻는 서브쿼리 빌더
-      const commonGameIdsQb = this.userGameRepository
-        .createQueryBuilder('ug')
-        .select('ug.gameId')
-        .innerJoin(
-          `(${userGamesQuery.getQuery()})`,
-          'user_games',
-          'ug.gameId = user_games.gameId',
-        )
-        .innerJoin(
-          `(${friendGamesQuery.getQuery()})`,
-          'friend_games',
-          'ug.gameId = friend_games.gameId',
-        )
-        .where(
-          `ug.gameId IN (${userGamesQuery.getQuery()})`,
-          userGamesQuery.getParameters() as Record<string, unknown>,
-        )
-        .andWhere(
-          `ug.gameId IN (${friendGamesQuery.getQuery()})`,
-          friendGamesQuery.getParameters() as Record<string, unknown>,
+      // 4. Steam API로 게임 목록 조회 (병렬 처리)
+      const [userGamesResponse, friendGamesResponse] = await Promise.all([
+        this.steamService.getOwnedGames(user.steamId),
+        this.steamService.getOwnedGames(friend.steamId),
+      ]);
+
+      // 5. 공통 게임 추출
+      const commonGames = this.findCommonGames(
+        userGamesResponse.games || [],
+        friendGamesResponse.games || [],
+      );
+
+      // 6. 검색 필터 적용
+      let filteredGames = commonGames;
+      if (dto.search && typeof dto.search === 'string') {
+        const searchLower = dto.search.toLowerCase();
+        filteredGames = commonGames.filter((game) =>
+          typeof game.name === 'string'
+            ? game.name.toLowerCase().includes(searchLower)
+            : false,
         );
-
-      // 4. 공통 게임 정보와 전체 개수를 조회하는 메인 쿼리 빌더
-      const gameRepository =
-        this.userGameRepository.manager.getRepository(Game);
-      const qb = gameRepository
-        .createQueryBuilder('game')
-        .where(`game.id IN (${commonGameIdsQb.getQuery()})`)
-        .setParameters(commonGameIdsQb.getParameters());
-
-      // 5. 총 개수 조회: Promise를 반환하므로 await 사용
-      const total = await qb.getCount();
-
-      // 페이지네이션 및 정렬 로직 (동기적)
-      // 페이지네이션 기본값 적용 (undefined 방어)
-      const page = query.page ?? 1;
-      const limit = query.limit ?? 10;
-      const skip = (page - 1) * limit;
-
-      // 2️⃣ 쿼리 빌더에 적용
-      qb.skip(skip).take(limit);
-
-      // 3️⃣ 정렬
-      if (query.sortBy) {
-        qb.orderBy(`game.${query.sortBy}`, query.ascending ? 'ASC' : 'DESC');
       }
 
-      // 4️⃣ 데이터 조회
-      const commonGames = await qb.getMany();
+      // 7. 정렬 적용
+      const sortedGames = this.sortCommonGames(filteredGames, dto.sortBy);
 
-      // 5️⃣ 응답 구성
-      const response: PaginatedResponse<Game> = {
-        data: commonGames,
+      // 8. 페이지네이션
+      const total = sortedGames.length;
+      const skip = (dto.page - 1) * dto.limit;
+      const paginatedGames = sortedGames.slice(skip, skip + dto.limit);
+
+      // 9. 응답 구성
+      const response: CommonGamesResponse = {
+        data: paginatedGames,
         meta: {
-          page,
-          limit,
+          userSteamId: user.steamId,
+          friendSteamId: friend.steamId,
+          page: dto.page,
+          limit: dto.limit,
           total,
-          totalPages: Math.ceil(total / limit),
-          hasNext: skip + limit < total,
-          hasPrev: page > 1,
+          totalPages: Math.ceil(total / dto.limit),
+          hasNext: skip + dto.limit < total,
+          hasPrev: dto.page > 1,
         },
       };
-      // 7. 캐시 저장: Promise를 반환하므로 await 사용
+
+      // 10. 캐시 저장 (5분)
       await this.cacheManager.set(cacheKey, response, this.CACHE_TTL);
+
       return response;
     } catch (error) {
-      if (error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ForbiddenException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new InternalServerErrorException(
-        '공통 게임 목록 조회 중 오류가 발생했습니다.',
+        '공통 게임 조회 중 오류가 발생했습니다.',
       );
+    }
+  }
+
+  private async validateFriendship(
+    userId: number,
+    friendId: number,
+  ): Promise<void> {
+    if (userId === friendId) {
+      throw new BadRequestException('자기 자신과는 비교할 수 없습니다.');
+    }
+
+    const friendship = await this.friendRepository.findOne({
+      where: { userId, friendId, status: 'accepted' },
+    });
+
+    if (!friendship) {
+      throw new ForbiddenException('친구 관계가 아니거나 승인되지 않았습니다.');
+    }
+  }
+
+  private findCommonGames(
+    userGames: Array<{
+      appid: number;
+      name?: string;
+      playtime_forever: number;
+      img_icon_url?: string;
+      rtime_last_played?: number;
+    }>,
+    friendGames: Array<{
+      appid: number;
+      name?: string;
+      playtime_forever: number;
+      img_icon_url?: string;
+      rtime_last_played?: number;
+    }>,
+  ): CommonGame[] {
+    const friendGamesMap = new Map(
+      friendGames.map((game) => [game.appid, game]),
+    );
+
+    const commonGames: CommonGame[] = [];
+
+    for (const userGame of userGames) {
+      const friendGame = friendGamesMap.get(userGame.appid);
+      if (friendGame) {
+        commonGames.push({
+          appid: userGame.appid,
+          name: userGame.name || 'Unknown Game',
+          playtime_forever_user: userGame.playtime_forever || 0,
+          playtime_forever_friend: friendGame.playtime_forever || 0,
+          img_icon_url: userGame.img_icon_url,
+          headerImageUrl: this.steamService.buildAppHeaderUrl(userGame.appid),
+          rtime_last_played_user: userGame.rtime_last_played,
+          rtime_last_played_friend: friendGame.rtime_last_played,
+        });
+      }
+    }
+
+    return commonGames;
+  }
+
+  private sortCommonGames(
+    games: CommonGame[],
+    sortBy?: 'playtime' | 'name' | 'recent',
+  ): CommonGame[] {
+    const sorted = [...games];
+
+    switch (sortBy) {
+      case 'playtime':
+        sorted.sort(
+          (a, b) =>
+            b.playtime_forever_user +
+            b.playtime_forever_friend -
+            (a.playtime_forever_user + a.playtime_forever_friend),
+        );
+        break;
+
+      case 'name':
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+
+      case 'recent':
+        sorted.sort((a, b) => {
+          const aRecent = Math.max(
+            a.rtime_last_played_user || 0,
+            a.rtime_last_played_friend || 0,
+          );
+          const bRecent = Math.max(
+            b.rtime_last_played_user || 0,
+            b.rtime_last_played_friend || 0,
+          );
+          return bRecent - aRecent;
+        });
+        break;
+
+      default:
+        sorted.sort(
+          (a, b) =>
+            b.playtime_forever_user +
+            b.playtime_forever_friend -
+            (a.playtime_forever_user + a.playtime_forever_friend),
+        );
+        break;
+    }
+
+    return sorted;
+  }
+
+  private generateCommonGamesCacheKey(
+    userId: number,
+    friendId: number,
+    dto: GetCommonGamesDto,
+  ): string {
+    const [id1, id2] = [userId, friendId].sort((a, b) => a - b);
+
+    const params: (string | number)[] = [
+      id1,
+      id2,
+      dto.page,
+      dto.limit,
+      dto.search || '',
+      dto.sortBy || 'playtime',
+    ];
+
+    return `friends:common-games:${params.join(':')}`;
+  }
+
+  async invalidateCommonGamesCache(
+    userId: number,
+    friendId: number,
+  ): Promise<void> {
+    try {
+      const redisStore = this.cacheManager.stores as unknown as RedisCache;
+
+      if (redisStore && typeof redisStore.keys === 'function') {
+        const [id1, id2] = [userId, friendId].sort((a, b) => a - b);
+        const pattern = `friends:common-games:${id1}:${id2}:*`;
+        const keys: string[] = await redisStore.keys(pattern);
+
+        if (keys && keys.length > 0) {
+          await Promise.all(keys.map((key) => this.cacheManager.del(key)));
+        }
+      }
+    } catch (error) {
+      console.error('공통 게임 캐시 무효화 중 오류 발생:', error);
     }
   }
 }

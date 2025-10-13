@@ -15,9 +15,9 @@ import { userAchievementDto } from '../dto/userAchievement.dto'; // 테스트용
 // 임의 유저ID 1사용 하드코딩
 @Controller('user_achievements')
 export class UserAchievementController {
-  constructor(
-    private readonly userAchievementService: userAchievementService,
-  ) {}
+  constructor(private readonly userAchievementService: userAchievementService) {
+    /* 공백 오류 */
+  }
   @Get('games/:gameId/achievements')
   async getUserGameAchievements(
     @Param('gameId', ParseIntPipe) gameId: number,
