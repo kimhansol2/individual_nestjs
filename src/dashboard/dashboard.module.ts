@@ -7,7 +7,7 @@ import { DashboardService } from './dashboard.service';
 import { User } from '../domain/users/user.entity';
 import { OwnedGame } from '../domain/games/owned-game.entity';
 import { Game } from '../domain/games/game.entity';
-import { Friend } from '../domain/friend/friend.entity';
+import { Friend } from '../domain/friends/friends.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, OwnedGame, Game, Friend])],

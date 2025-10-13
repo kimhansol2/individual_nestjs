@@ -9,7 +9,7 @@ import { Repository } from 'typeorm';
 import { User } from '../domain/users/user.entity';
 import { OwnedGame } from '../domain/games/owned-game.entity';
 import { Game } from '../domain/games/game.entity';
-import { Friend } from '../domain/friend/friend.entity';
+import { Friend } from 'src/domain/friends/friends.entity';
 import { ownedGameDto } from '../dto/ownedGame.dto';
 import { FriendDto } from '../dto/friends.dto';
 import { DashboardDataDto } from '../dto/dashboardData.dto';
@@ -92,8 +92,8 @@ export class DashboardService {
         userId: f.userId,
         friendId: f.friendId,
         friend_since: f.friend_since ?? undefined, // Date | undefined
-        created_at: f.created_at,
-        updated_at: f.updated_at,
+        created_at: f.createdAt,
+        updated_at: f.updatedAt,
       }));
 
       // dashboard data
