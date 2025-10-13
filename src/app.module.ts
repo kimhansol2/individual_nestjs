@@ -35,6 +35,8 @@ import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
 import { REDIS } from './infra/redis/redis.constants';
 import { Friend } from './domain/friend/friend.entity';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { EtagInterceptor } from './common/interceptors/etag.interceptor';
 
 @Module({
   imports: [
@@ -101,7 +103,12 @@ import { Friend } from './domain/friend/friend.entity';
     DashboardController,
     UserAchievementController,
   ],
-  providers: [AppService, DashboardService, userAchievementService],
+  providers: [
+    AppService,
+    DashboardService,
+    userAchievementService,
+    { provide: APP_INTERCEPTOR, useClass: EtagInterceptor },
+  ],
 })
 export class AppModule {
   /* 공백오류 */

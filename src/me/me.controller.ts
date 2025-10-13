@@ -28,11 +28,12 @@ function parseBool(s?: string) {
 
 @ApiTags('me')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('me')
 export class MeController {
   constructor(private readonly meService: MeService) {}
 
+  @UseInterceptors(NoStoreInterceptor)
+  @UseGuards(JwtAuthGuard)
   @Get('games')
   async listMyGames(
     @UserId() userId: number,

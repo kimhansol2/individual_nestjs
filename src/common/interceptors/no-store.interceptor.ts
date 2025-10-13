@@ -14,7 +14,9 @@ export class NoStoreInterceptor implements NestInterceptor<unknown, unknown> {
     next: CallHandler<unknown>,
   ): Observable<unknown> {
     const res = context.switchToHttp().getResponse<Response>();
-    res.setHeader('Cache-Control', 'no-store, private');
+    res.setHeader('Cache-Control', 'no-store, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.setHeader('Vary', 'Authorization');
     return next.handle();
   }
