@@ -24,8 +24,8 @@ export class Friend {
   status!: 'pending' | 'accepted' | 'blocked';
 
   @CreateDateColumn()
-  createdAt!: Date;
+  created_at!: Date;
 
   @UpdateDateColumn()
-  updatedAt!: Date;
+  updated_at!: Date;
 }

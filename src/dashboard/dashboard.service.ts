@@ -92,8 +92,8 @@ export class DashboardService {
         userId: f.userId,
         friendId: f.friendId,
         friend_since: f.friend_since ?? undefined, // Date | undefined
-        created_at: f.createdAt,
-        updated_at: f.updatedAt,
+        created_at: f.created_at,
+        updated_at: f.updated_at,
       }));
 
       // dashboard data
