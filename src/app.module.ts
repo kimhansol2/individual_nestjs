@@ -2,17 +2,23 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
-import { CacheAsideModule } from './common/cache/cache-aside.module';
 
-// Controller 임포트
+// Controllers
 import { AppController } from './app.controller';
+import { AuthController } from './auth/auth.controller';
 import { HealthController } from './infra/redis/redis-health.controller';
 import { DashboardController } from './dashboard/dashboard.controller';
 import { UserAchievementController } from './user_achievement/user_achievement.controller';
 
-// Module 임포트
+// Services
+import { AppService } from './app.service';
+import { DashboardService } from './dashboard/dashboard.service';
+import { userAchievementService } from './user_achievement/user_achievement.service';
+
+// Modules
 import { SteamModule } from './integrations/steam/steam.module';
 import { AuthModule } from './auth/auth.module';
 import { MeModule } from './me/me.module';
@@ -20,21 +26,18 @@ import { UsersModule } from './domain/users/users.module';
 import { GameDomainModule } from './domain/games/game.module';
 import { AchievementsModule } from './domain/achievements/achievements.module';
 import { RedisModule } from './infra/redis/redis.module';
+import { CacheAsideModule } from './common/cache/cache-aside.module';
+import { FriendsModule } from './domain/friends/friends.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AchievementModule } from './achievement/achievement.module';
 
-// Service 임포트
-import { AppService } from './app.service';
-import { DashboardService } from './dashboard/dashboard.service';
-import { userAchievementService } from './user_achievement/user_achievement.service';
-
-// Entity 임포트
+// Entities
 import { OwnedGame } from './domain/games/owned-game.entity';
 import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
-import { Friend } from './domain/friend/friend.entity';
+import { Friend } from './domain/friends/friends.entity';
 
 @Module({
   imports: [
@@ -55,6 +58,12 @@ import { Friend } from './domain/friend/friend.entity';
         REDIS_URL: Joi.string().required(),
       }),
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 10,
+      },
+    ]),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({
         type: 'postgres',
@@ -71,9 +80,7 @@ import { Friend } from './domain/friend/friend.entity';
         entities: [OwnedGame, Game, User, Achievement, UserAchievement, Friend],
       }),
     }),
-    // TypeOrmModule.forFeature 추가
     TypeOrmModule.forFeature([User, OwnedGame, Game, Friend]),
-
     CacheModule.registerAsync({
       isGlobal: true,
       useFactory: async () => ({
@@ -92,17 +99,17 @@ import { Friend } from './domain/friend/friend.entity';
     GameDomainModule,
     RedisModule,
     CacheAsideModule,
+    FriendsModule,
     DashboardModule,
     AchievementModule,
   ],
   controllers: [
     AppController,
     HealthController,
+    AuthController,
     DashboardController,
     UserAchievementController,
   ],
   providers: [AppService, DashboardService, userAchievementService],
 })
-export class AppModule {
-  /* 공백오류 */
-}
+export class AppModule {}

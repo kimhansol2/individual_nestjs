@@ -5,14 +5,14 @@ import { Achievement } from '../domain/achievements/achievement.entity';
 
 @Injectable()
 export class AchievementRepository {
-    constructor(
-        @InjectRepository(Achievement)
-        private readonly repo: Repository<Achievement>,
-    ) {
-        /* 공백오류 */
-    }
+  constructor(
+    @InjectRepository(Achievement)
+    private readonly repo: Repository<Achievement>,
+  ) {
+    /* 공백오류 */
+  }
 
-    async findByGameId(gameId: number): Promise<Achievement[]> {
-        return this.repo.find({ where: { gameId } });
-    }
+  async findByGameId(gameId: number): Promise<Achievement[]> {
+    return this.repo.find({ where: { gameId } });
+  }
 }

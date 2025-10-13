@@ -7,10 +7,10 @@ import { AchievementController } from './achievement.controller';
 import { AchievementRepository } from './achievement.repository';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Achievement])],
-    providers: [AchievementService, AchievementRepository],
-    controllers: [AchievementController],
+  imports: [TypeOrmModule.forFeature([Achievement])],
+  providers: [AchievementService, AchievementRepository],
+  controllers: [AchievementController],
 })
 export class AchievementModule {
-    /* 공백 오류 */
+  /* 공백 오류 */
 }
