@@ -1,13 +1,17 @@
 import { Inject, Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import Redis from 'ioredis';
+import type Redis from 'ioredis';
+import { REDIS } from '../infra/redis/redis.constants';
 import { randomBytes, createHash } from 'crypto';
 import { errorSummary } from 'src/common/error.util';
 import { JwtService } from '@nestjs/jwt';
 import { UsersRepository } from 'src/domain/users/users.repository';
 import { User } from 'src/domain/users/user.entity';
 import { UnauthorizedException } from '@nestjs/common';
+import { CacheAsideService } from 'src/common/cache/cache-aside.service';
+import { myGamesIdx, profileIdx } from 'src/common/cache/keys';
+import { OwnedGameRepository } from 'src/domain/games/owned-game.repository';
 
 const OP = 'https://steamcommunity.com/openid/login';
 
@@ -48,17 +52,23 @@ export class SteamOpenIdService {
 
   constructor(
     private readonly cfg: ConfigService,
-    @Inject('REDIS') private readonly redis: Redis,
+    @Inject(REDIS) private readonly redis: Redis,
     private readonly jwt: JwtService,
     private readonly usersRepo: UsersRepository,
+    private readonly ownedRepo: OwnedGameRepository,
+    private readonly cache: CacheAsideService,
   ) {
     this.realm = this.cfg.getOrThrow<string>('STEAM_REALM');
     this.returnTo = this.cfg.getOrThrow<string>('STEAM_RETURN_TO');
     this.accessSecret = this.cfg.getOrThrow<string>('JWT_ACCESS_SECRET');
     this.refreshSecret = this.cfg.getOrThrow<string>('JWT_REFRESH_SECRET');
-    this.accessTtlSec = Number(this.cfg.get('JWT_EXPIRES_IN', '900'));
-    this.refreshTtlSec = Number(
-      this.cfg.get('JWT_REFRESH_EXPIRES_IN', '259200'),
+    this.accessTtlSec = parseInt(
+      this.cfg.get<string>('JWT_EXPIRES_IN', '900') ?? '900',
+      10,
+    );
+    this.refreshTtlSec = parseInt(
+      this.cfg.get<string>('JWT_REFRESH_EXPIRES_IN', '259200') ?? '259200',
+      10,
     );
   }
 
@@ -142,6 +152,23 @@ export class SteamOpenIdService {
 
     // 유저 upsert (프로필 함께 패치)
     const user = await this.ensureUser(steamid64, { personaName, avatar });
+
+    await this.cache.invalidateByIndex(profileIdx(user.id));
+
+    if (steamKey) {
+      try {
+        const { games, owned } = await this.ownedRepo.fetchOwnedGamesAsRows(
+          steamKey,
+          user,
+        );
+
+        await this.ownedRepo.upsertGames(games);
+        await this.ownedRepo.upsertOwnedMany(owned);
+        await this.cache.invalidateByIndex(myGamesIdx(user.id));
+      } catch {
+        /*..*/
+      }
+    }
 
     // 토큰 발급
     const { token: accessToken } = await this.signAccessToken(user.id);

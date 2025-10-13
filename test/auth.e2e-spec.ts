@@ -7,10 +7,13 @@ import { SteamOpenIdService } from '../src/auth/steam-openid.service';
 import { UsersRepository } from '../src/domain/users/users.repository';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { REDIS } from 'src/infra/redis/redis.constants';
 
 //axios 모킹 (OpenID check_authentication & GetPlayerSummaries)
 import axios from 'axios';
 import { Server } from 'http';
+import { OwnedGameRepository } from 'src/domain/games/owned-game.repository';
+import { CacheAsideService } from 'src/common/cache/cache-aside.service';
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
@@ -28,35 +31,73 @@ type ExecReply = [error: null, value: 'OK' | 1 | 0];
 // 간단 Redis 목: ioredis가 쓰는 메서드만 흉내 (set/get/del/multi/exec)
 // TTL, NX는 테스트가 필요한 부분만 반영
 class MockRedis {
-  private store = new Map<string, string>();
-  private queue: Array<() => ExecReply> = [];
+  private store = new Map<string, { value: string; exp?: number }>();
 
-  set(key: string, value: string): 'OK' {
-    this.store.set(key, value);
+  private now() {
+    return Date.now();
+  }
+  private isExpired(key: string) {
+    const rec = this.store.get(key);
+    if (!rec) return false;
+    if (rec.exp && rec.exp <= this.now()) {
+      this.store.delete(key);
+      return true;
+    }
+    return false;
+  }
+
+  set(key: string, value: string, ...args: unknown[]): 'OK' | null {
+    let exSec: number | undefined;
+    let nx = false;
+
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === 'EX') {
+        exSec = Number(args[i + 1]);
+        i++;
+      } else if (a === 'NX') {
+        nx = true;
+      }
+    }
+
+    if (nx) {
+      const existed = this.store.has(key) && !this.isExpired(key);
+      if (existed) return null;
+    }
+
+    const exp = exSec ? this.now() + exSec * 1000 : undefined;
+    this.store.set(key, { value, exp });
     return 'OK';
   }
 
   get(key: string): string | null {
-    return this.store.get(key) ?? null;
+    if (this.isExpired(key)) return null;
+    return this.store.get(key)?.value ?? null;
   }
 
   del(key: string): 1 | 0 {
-    return this.store.delete(key) ? 1 : 0;
+    const existed = this.store.delete(key);
+    return existed ? 1 : 0;
   }
 
   multi() {
+    const ops: Array<() => ExecReply> = [];
+
     const builder = {
-      set: (key: string, value: string) => {
-        this.queue.push(() => [null, this.set(key, value)]);
+      set: (key: string, value: string, ...flags: unknown[]) => {
+        ops.push(() => {
+          const v = this.set(key, value, ...flags);
+          return [null, (v ?? 'OK') as 'OK'];
+        });
         return builder;
       },
       del: (key: string) => {
-        this.queue.push(() => [null, this.del(key)]);
+        ops.push(() => [null, this.del(key)]);
         return builder;
       },
       exec: (): Promise<ExecReply[]> => {
-        const out = this.queue.map((fn) => fn());
-        this.queue = [];
+        const out = ops.map((fn) => fn());
+        ops.length = 0;
         return Promise.resolve(out);
       },
     };
@@ -81,6 +122,28 @@ const usersRepoMock: UsersRepository = {
       avatar: patch?.avatar ?? null,
     }),
 } as UsersRepository;
+
+const ownedRepoMock: Partial<OwnedGameRepository> = {
+  fetchOwnedGamesAsRows: async (_steamKey, _user) => {
+    await Promise.resolve();
+    void _steamKey;
+    void _user;
+    return { games: [], owned: [] };
+  },
+  upsertGames: async () => {},
+  upsertOwnedMany: async () => {},
+};
+
+const cachePassThrough: Pick<
+  CacheAsideService,
+  'getOrLoad' | 'invalidateByIndex'
+> = {
+  getOrLoad: <T>(_key: string, loader: () => Promise<T>) => loader(),
+  invalidateByIndex: async (_idx: string) => {
+    await Promise.resolve();
+    void _idx;
+  },
+};
 
 const configMock: Pick<ConfigService, 'get' | 'getOrThrow'> = {
   getOrThrow: (k: string) => {
@@ -124,8 +187,17 @@ describe('Auth flow: GET /auth/steam -> GET /auth/steam/callback -> POST /auth/s
       controllers: [SteamAuthController],
       providers: [
         SteamOpenIdService,
-        { provide: 'REDIS', useValue: redis },
+        { provide: REDIS, useValue: redis },
+        { provide: 'REDIS', useExisting: REDIS },
         { provide: UsersRepository, useValue: usersRepoMock },
+        {
+          provide: OwnedGameRepository,
+          useValue: ownedRepoMock as OwnedGameRepository,
+        },
+        {
+          provide: CacheAsideService,
+          useValue: cachePassThrough as CacheAsideService,
+        },
         { provide: ConfigService, useValue: configMock as ConfigService },
       ],
     }).compile();

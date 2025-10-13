@@ -1,7 +1,7 @@
 // friendService
 
 import { Injectable } from '@nestjs/common';
-import { FriendsRepository } from '../domain/friend/friend.repository';
+import { FriendsRepository } from '../domain/friends/friends.repository';
 import { FriendDto } from '../dto/friends.dto';
 
 @Injectable()

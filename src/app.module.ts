@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import * as Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -37,6 +37,9 @@ import { Game } from './domain/games/game.entity';
 import { User } from './domain/users/user.entity';
 import { Achievement } from './domain/achievements/achievement.entity';
 import { UserAchievement } from './domain/achievements/user-achievement.entity';
+import { REDIS } from './infra/redis/redis.constants';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { EtagInterceptor } from './common/interceptors/etag.interceptor';
 import { Friend } from './domain/friends/friends.entity';
 
 @Module({
@@ -83,12 +86,13 @@ import { Friend } from './domain/friends/friends.entity';
     TypeOrmModule.forFeature([User, OwnedGame, Game, Friend]),
     CacheModule.registerAsync({
       isGlobal: true,
-      useFactory: async () => ({
+      imports: [ConfigModule, RedisModule],
+      inject: [ConfigService, REDIS],
+      useFactory: async (cfg: ConfigService) => ({
         store: await redisStore({
-          url: process.env.REDIS_URL,
+          url: cfg.getOrThrow<string>('REDIS_URL'),
+          ttl: 600,
         }),
-        ttl: 30,
-        max: 0,
       }),
     }),
     SteamModule,
@@ -110,6 +114,11 @@ import { Friend } from './domain/friends/friends.entity';
     DashboardController,
     UserAchievementController,
   ],
-  providers: [AppService, DashboardService, userAchievementService],
+  providers: [
+    AppService,
+    DashboardService,
+    userAchievementService,
+    { provide: APP_INTERCEPTOR, useClass: EtagInterceptor },
+  ],
 })
 export class AppModule {}

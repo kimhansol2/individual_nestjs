@@ -15,7 +15,6 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { MeService } from './me.service';
 import { Envelope, MeProfileDto } from './dto/me-profile.dto';
 import { ListMyGamesDto } from './dto/list-my-games.dto';
@@ -23,17 +22,25 @@ import { UserId } from 'src/auth/user-id.decorator';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { NoStoreInterceptor } from 'src/common/interceptors/no-store.interceptor';
 
+function parseBool(s?: string) {
+  return s === 'true' || s === '1' || s === 't' || s === 'yes';
+}
+
 @ApiTags('me')
 @ApiBearerAuth()
-@UseGuards(ThrottlerGuard)
 @Controller('me')
-@UseGuards(JwtAuthGuard)
 export class MeController {
   constructor(private readonly meService: MeService) {}
 
+  @UseInterceptors(NoStoreInterceptor)
+  @UseGuards(JwtAuthGuard)
   @Get('games')
-  async listMyGames(@UserId() userId: number, @Query() q: ListMyGamesDto) {
-    return this.meService.listMyGames(userId, q);
+  async listMyGames(
+    @UserId() userId: number,
+    @Query() q: ListMyGamesDto,
+    @Query('force') force?: string,
+  ) {
+    return this.meService.listMyGames(userId, q, parseBool(force));
   }
 
   @ApiOperation({ summary: '현재 로그인한 사용자의 기본 프로필 반환' })

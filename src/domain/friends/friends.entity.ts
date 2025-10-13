@@ -17,12 +17,15 @@ export class Friend {
   @Column()
   friendId!: number;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  friend_since?: Date;
+
   @Column({ default: 'pending' })
   status!: 'pending' | 'accepted' | 'blocked';
 
   @CreateDateColumn()
-  createdAt!: Date;
+  created_at!: Date;
 
   @UpdateDateColumn()
-  updatedAt!: Date;
+  updated_at!: Date;
 }
