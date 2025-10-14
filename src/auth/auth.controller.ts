@@ -71,6 +71,8 @@ export class SteamAuthController {
       path: '/api/v1',
     });
 
+    const FRONT = process.env.PUBLIC_WEB_ORIGIN ?? 'http://localhost:3001';
+    res.redirect(302, `{FRONT}/dashboard`);
     // body에는 accessToken만
     return {
       tokenType: 'Bearer',
