@@ -62,24 +62,35 @@ export class SteamAuthController {
   ) {
     const result = await this.steam.finalizeLogin(query);
 
+    const { refreshToken, refreshMaxAgeMs } = await this.steam.issueTokens(
+      result.user.id,
+      { refresh: true },
+    );
+
     // refersh 쿠키 설정 (HttpOnly)
-    res.cookie('refresh_token', result.refreshToken, {
+    res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: false, // 바꿔야함
       sameSite: 'lax',
-      maxAge: result.refreshTokenMaxAgeMs,
+      maxAge: refreshMaxAgeMs,
       path: '/api/v1',
     });
 
     const FRONT = process.env.PUBLIC_WEB_ORIGIN ?? 'http://localhost:3001';
-    res.redirect(302, `{FRONT}/dashboard`);
+    res.redirect(302, `${FRONT}/dashboard`);
     // body에는 accessToken만
-    return {
-      tokenType: 'Bearer',
-      accessToken: result.accessToken,
-      expiresIn: result.accessTokenExpiresIn,
-      user: result.user,
-    };
+  }
+
+  @Post('token')
+  async issueAccess(@Req() req: Request) {
+    const rt = req.cookies?.['refresh_token'];
+    if (!rt) return { error: 'NO_REFRESH' };
+
+    const userId = await this.steam.verifyRefreshAndGetUser(rt);
+    const { accessToken, accessExpSec } = await this.steam.issueTokens(userId, {
+      access: true,
+    });
+    return { tokenType: 'Bearer', accessToken, expiresIn: accessExpSec };
   }
 
   @Post('refresh')

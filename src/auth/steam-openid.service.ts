@@ -5,7 +5,12 @@ import type Redis from 'ioredis';
 import { REDIS } from '../infra/redis/redis.constants';
 import { randomBytes, createHash } from 'crypto';
 import { errorSummary } from 'src/common/error.util';
-import { JwtService } from '@nestjs/jwt';
+import {
+  JsonWebTokenError,
+  JwtService,
+  NotBeforeError,
+  TokenExpiredError,
+} from '@nestjs/jwt';
 import { UsersRepository } from 'src/domain/users/users.repository';
 import { User } from 'src/domain/users/user.entity';
 import { UnauthorizedException } from '@nestjs/common';
@@ -117,10 +122,6 @@ export class SteamOpenIdService {
 
   async finalizeLogin(query: Record<string, string>): Promise<{
     user: Pick<User, 'id' | 'steamId' | 'personaName' | 'avatar'>;
-    accessToken: string;
-    accessTokenExpiresIn: number;
-    refreshToken: string;
-    refreshTokenMaxAgeMs: number;
   }> {
     // OpenID 콜백 검증 + SteamID64 추출
     const { steamid64 } = await this.verifyCallback(query);
@@ -170,12 +171,6 @@ export class SteamOpenIdService {
       }
     }
 
-    // 토큰 발급
-    const { token: accessToken } = await this.signAccessToken(user.id);
-    const { token: refreshToken, jti } = await this.signRefreshToken(user.id);
-
-    await this.storeRefreshToken(jti, user.id, refreshToken);
-
     return {
       user: {
         id: user.id,
@@ -183,11 +178,69 @@ export class SteamOpenIdService {
         personaName: user.personaName,
         avatar: user.avatar,
       },
-      accessToken,
-      accessTokenExpiresIn: this.accessTtlSec,
-      refreshToken,
-      refreshTokenMaxAgeMs: this.refreshTtlSec * 1000,
     };
+  }
+
+  async issueTokens(
+    userId: number,
+    opts: { access?: boolean; refresh?: boolean },
+  ): Promise<{
+    accessToken?: string;
+    accessExpSec?: number;
+    refreshToken?: string;
+    refreshMaxAgeMs?: number;
+  }> {
+    const out: {
+      accessToken?: string;
+      accessExpSec?: number;
+      refreshToken?: string;
+      refreshMaxAgeMs?: number;
+    } = {};
+
+    if (opts.access) {
+      const { token } = await this.signAccessToken(userId);
+      out.accessToken = token;
+      out.accessExpSec = this.accessTtlSec;
+    }
+
+    if (opts.refresh) {
+      const { token, jti } = await this.signRefreshToken(userId);
+      await this.storeRefreshToken(token, userId, jti);
+      out.refreshToken = token;
+      out.refreshMaxAgeMs = this.accessTtlSec;
+    }
+    return out;
+  }
+
+  async verifyRefreshAndGetUser(refreshToken: string): Promise<number> {
+    let payload: RefreshPayload;
+    try {
+      payload = this.jwt.verify<RefreshPayload>(refreshToken, {
+        secret: this.refreshSecret,
+        algorithms: ['HS256'],
+        ignoreExpiration: false,
+        clockTolerance: 5,
+      });
+    } catch (e) {
+      if (e instanceof TokenExpiredError)
+        throw new UnauthorizedException('REFRESH_EXPIRED');
+      if (e instanceof NotBeforeError)
+        throw new UnauthorizedException('REFRESH_NOT_ACTIVE');
+      if (e instanceof JsonWebTokenError)
+        throw new UnauthorizedException('REFRESH_INVALID');
+    }
+
+    const jti = payload!.jti;
+    const userId = Number(payload!.sub);
+
+    if (!jti || !userId) throw new UnauthorizedException('REFRESH_MALFORMED');
+
+    const key = `refresh_jti:${jti}`;
+    const stored = await this.redis.get(key);
+    if (!stored) throw new UnauthorizedException('REFERESH_REVOKED_OR_MISSING');
+    if (stored !== String(userId))
+      throw new UnauthorizedException('REFERESH_MISMATCH');
+    return userId;
   }
 
   async testLogin(steamId: string) {
