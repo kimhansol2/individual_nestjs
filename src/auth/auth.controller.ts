@@ -15,6 +15,7 @@ import { Body } from '@nestjs/common';
 interface TestLoginDto {
   steamId: string;
 }
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly steamOpenIdService: SteamOpenIdService) {}
@@ -32,6 +33,26 @@ export class AuthController {
       accessToken: result.accessToken,
       expiresIn: result.accessTokenExpiresIn,
     };
+  }
+
+  @Post('logout')
+  @HttpCode(204)
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refresh = getCookie(req, 'refresh_token');
+    if (refresh) {
+      await this.steamOpenIdService.revokeRefreshToken(refresh);
+    }
+
+    const cookieOpts = {
+      path: '/api/v1',
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      secure: false,
+    };
+
+    res.clearCookie('refresh_token', cookieOpts);
+    res.clearCookie('access_token', cookieOpts);
+    return;
   }
 }
 function getCookie(req: Request, name: string): string | undefined {

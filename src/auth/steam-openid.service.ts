@@ -68,7 +68,7 @@ export class SteamOpenIdService {
     this.accessSecret = this.cfg.getOrThrow<string>('JWT_ACCESS_SECRET');
     this.refreshSecret = this.cfg.getOrThrow<string>('JWT_REFRESH_SECRET');
     this.accessTtlSec = parseInt(
-      this.cfg.get<string>('JWT_EXPIRES_IN', '900') ?? '900',
+      this.cfg.get<string>('JWT_EXPIRES_IN', '90000') ?? '90000',
       10,
     );
     this.refreshTtlSec = parseInt(
@@ -200,14 +200,14 @@ export class SteamOpenIdService {
     if (opts.access) {
       const { token } = await this.signAccessToken(userId);
       out.accessToken = token;
-      out.accessExpSec = this.accessTtlSec;
+      out.accessExpSec = this.accessTtlSec * 1000;
     }
 
     if (opts.refresh) {
       const { token, jti } = await this.signRefreshToken(userId);
-      await this.storeRefreshToken(token, userId, jti);
+      await this.storeRefreshToken(jti, userId, token);
       out.refreshToken = token;
-      out.refreshMaxAgeMs = this.accessTtlSec;
+      out.refreshMaxAgeMs = this.refreshTtlSec * 1000;
     }
     return out;
   }
@@ -231,16 +231,52 @@ export class SteamOpenIdService {
     }
 
     const jti = payload!.jti;
-    const userId = Number(payload!.sub);
+    const userIdFromJwt = Number(payload!.sub);
 
-    if (!jti || !userId) throw new UnauthorizedException('REFRESH_MALFORMED');
+    if (!jti || !userIdFromJwt)
+      throw new UnauthorizedException('REFRESH_MALFORMED');
 
-    const key = `refresh_jti:${jti}`;
-    const stored = await this.redis.get(key);
+    const stored = await this.redis.get(`rt:${jti}`);
     if (!stored) throw new UnauthorizedException('REFERESH_REVOKED_OR_MISSING');
-    if (stored !== String(userId))
+
+    const { userId: userIdFromStore, hash } = parseRefreshEntry(stored);
+
+    const givenHash = createHash('sha256').update(refreshToken).digest('hex');
+
+    if (userIdFromStore !== userIdFromJwt)
+      throw new UnauthorizedException('REFRESH_SUBJECT_MISMATCH');
+    if (hash !== givenHash)
       throw new UnauthorizedException('REFERESH_MISMATCH');
-    return userId;
+    return userIdFromStore;
+  }
+
+  async revokeRefreshToken(refreshToken: string): Promise<void> {
+    let payload: RefreshPayload | null = null;
+    try {
+      payload = this.jwt.verify<RefreshPayload>(refreshToken, {
+        secret: this.refreshSecret,
+        algorithms: ['HS256'],
+        ignoreExpiration: false,
+        clockTolerance: 5,
+      });
+    } catch {
+      return;
+    }
+
+    const jti = payload.jti;
+    const userIdFromJwt = payload.sub;
+    if (!jti || !userIdFromJwt) return;
+
+    const entry = await this.redis.get(`rt:${jti}`);
+    if (!entry) return;
+
+    const { userId: storedUserId, hash } = parseRefreshEntry(entry);
+    if (storedUserId !== userIdFromJwt) return;
+
+    const givenHash = createHash('sha256').update(refreshToken).digest('hex');
+    if (hash !== givenHash) return;
+
+    await this.redis.del(`rt:${jti}`);
   }
 
   async testLogin(steamId: string) {
